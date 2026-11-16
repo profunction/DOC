@@ -1,0 +1,32 @@
+{
+  "name": "anxin-care-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "新山老人照顾协调服务 — 网站 + 三端 Web/Android 应用",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug && ls -la app/build/outputs/apk/debug/"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/geolocation": "^7.0.0",
+    "@capacitor/local-notifications": "^7.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  }
+}

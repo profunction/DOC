@@ -1,0 +1,14 @@
+services:
+  anxin:
+    build: .
+    ports: ["8787:8787"]
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?请在 .env 设置}
+      DATA_KEY: ${DATA_KEY:?请在 .env 设置 (openssl rand -hex 32)}
+      HOTLINE_PHONE: ${HOTLINE_PHONE:-60123456789}
+      SEED_DEMO: ${SEED_DEMO:-0}
+    volumes:
+      - anxin-data:/data
+    restart: unless-stopped
+volumes:
+  anxin-data:
