@@ -1,9 +1,10 @@
 // 子女端：档案、报告、警报、预约、群组、付费、团队。
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { homeOutline, chatbubblesOutline, documentTextOutline, calendarOutline, alertCircleOutline, medkitOutline, cardOutline, peopleOutline } from 'ionicons/icons';
 import { useT } from '../i18n';
 import { useStore } from '../store';
 import { api, fmtTime } from '../api';
-import { Shell, useLoad, Badge, Field, Empty, TASK_TYPES, telLink, waLink, mapsLink, localDT, useErr } from '../components/ui';
+import { Shell, useLoad, Badge, Field, Empty, TASK_TYPES, telLink, waLink, mapsLink, localDT, useErr, Btn } from '../components/ui';
 
 export default function Family() {
   const { t } = useT();
@@ -13,12 +14,12 @@ export default function Family() {
   useEffect(() => { if (!cid && clientIds[0]) setCid(clientIds[0]); }, [clientIds]);
   const { data: clients } = useLoad<any[]>('/clients');
   const tabs = [
-    { id: 'overview', label: t('overview'), icon: '🏠' }, { id: 'group', label: t('group'), icon: '💬' }, { id: 'reports', label: t('reports'), icon: '📝' },
-    { id: 'bookings', label: t('bookings'), icon: '📅' }, { id: 'alerts', label: t('alerts'), icon: '🚨' }, { id: 'profile', label: t('profile'), icon: '🩺' },
-    { id: 'payments', label: t('payments'), icon: '💳' }, { id: 'team', label: t('team'), icon: '👩‍⚕️' },
+    { id: 'overview', label: t('overview'), icon: homeOutline }, { id: 'group', label: t('group'), icon: chatbubblesOutline }, { id: 'reports', label: t('reports'), icon: documentTextOutline },
+    { id: 'bookings', label: t('bookings'), icon: calendarOutline }, { id: 'alerts', label: t('alerts'), icon: alertCircleOutline }, { id: 'profile', label: t('profile'), icon: medkitOutline },
+    { id: 'payments', label: t('payments'), icon: cardOutline }, { id: 'team', label: t('team'), icon: peopleOutline },
   ];
   const right = clients && clients.length > 1 ? (
-    <select value={cid} onChange={e => setCid(Number(e.target.value))}>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+    <select className="lang-select light" value={cid} onChange={e => setCid(Number(e.target.value))}>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
   ) : null;
   if (!cid) return <Shell title={t('appName')} tabs={tabs} tab={tab} onTab={setTab}><Empty /></Shell>;
   return (
@@ -47,9 +48,9 @@ function Overview({ cid, hotline, go }: { cid: number; hotline: string; go: (t: 
         <div className="row between"><h3>{c.name}</h3><Badge>{t('plan_' + c.plan)}</Badge></div>
         <p className="small muted">{c.address}</p>
         <div className="row">
-          <a className="btn sm" href={telLink(hotline)}>📞 {t('hotline')}</a>
-          <a className="btn sm ok" href={waLink(hotline)} target="_blank" rel="noreferrer">💬 {t('whatsapp')}</a>
-          <a className="btn sm ghost" href={mapsLink(c.address, c.lat, c.lng)} target="_blank" rel="noreferrer">📍 {t('address')}</a>
+          <Btn v="sm" href={telLink(hotline)}>📞 {t('hotline')}</Btn>
+          <Btn v="sm ok" href={waLink(hotline)} target="_blank" rel="noreferrer">💬 {t('whatsapp')}</Btn>
+          <Btn v="sm ghost" href={mapsLink(c.address, c.lat, c.lng)} target="_blank" rel="noreferrer">📍 {t('address')}</Btn>
         </div>
       </div>
       <div className="grid" style={{ marginTop: '.85rem' }}>
@@ -60,12 +61,12 @@ function Overview({ cid, hotline, go }: { cid: number; hotline: string; go: (t: 
         </div>
         <div className="card"><h3>📝 {t('lastReport')}</h3>
           {s.lastReport ? <ReportCard r={s.lastReport} compact /> : <Empty />}
-          <button className="btn sm ghost" onClick={() => go('reports')}>{t('reports')} →</button>
+          <Btn v="sm ghost" onClick={() => go('reports')}>{t('reports')} →</Btn>
         </div>
         <div className="card"><h3>🚨 {t('lastAlert')}</h3>
           {s.lastAlert ? <div><Badge kind={s.lastAlert.status}>{t('as_' + s.lastAlert.status)}</Badge> {t('a_' + s.lastAlert.type)} · {fmtTime(s.lastAlert.created_at)}<p className="small muted" style={{ marginTop: '.4rem' }}>{s.lastAlert.outcome}</p></div> : <Empty />}
         </div>
-        <div className="card stat"><div className="n">RM {s.dueAmount}</div><div className="l">{t('dueAmount')}</div><button className="btn sm ghost" onClick={() => go('payments')}>{t('payments')} →</button></div>
+        <div className="card stat"><div className="n">RM {s.dueAmount}</div><div className="l">{t('dueAmount')}</div><Btn v="sm ghost" onClick={() => go('payments')}>{t('payments')} →</Btn></div>
       </div>
     </div>
   );
@@ -123,7 +124,7 @@ function Alerts({ cid }: { cid: number }) {
   return (
     <div>
       {Err}
-      <div className="card row between"><span>{t('alerts')}</span><button className="btn danger sm" disabled={busy} onClick={raise}>🆘 {t('sos')}</button></div>
+      <div className="card row between"><span>{t('alerts')}</span><Btn v="danger sm" disabled={busy} onClick={raise}>🆘 {t('sos')}</Btn></div>
       {!data?.length && <Empty />}
       {data?.map(a => <AlertCard key={a.id} a={a} />)}
     </div>
@@ -150,13 +151,13 @@ function Bookings({ cid }: { cid: number }) {
           <Field label={t('bookingType')}><select value={type} onChange={e => setType(e.target.value)}>{TASK_TYPES.map(x => <option key={x} value={x}>{t('t_' + x)}</option>)}</select></Field>
           <Field label={t('bookingTime')}><input type="datetime-local" value={when} onChange={e => setWhen(e.target.value)} required /></Field>
           <Field label={t('bookingNotes')}><input value={notes} onChange={e => setNotes(e.target.value)} /></Field>
-          <div className="field"><label>&nbsp;</label><button className="btn">{t('submit')}</button></div>
+          <div className="field"><label>&nbsp;</label><Btn v="">{t('submit')}</Btn></div>
         </form>
       </div>
       <div className="card"><h3>{t('myBookings')}</h3>
         {!data?.length && <Empty />}
         <div className="list">{data?.map(x => <div key={x.id} className="row between"><span><b>{x.title}</b><div className="small muted">{fmtTime(x.scheduled_at)} · {x.assignee_name || x.partner_name || ''} {x.fee ? `· RM${x.fee}` : ''}</div></span>
-          <span className="row"><Badge kind={x.status}>{t('s_' + x.status)}</Badge>{['requested', 'assigned'].includes(x.status) && <button className="btn ghost sm" onClick={() => cancelT(x.id)}>{t('cancelBooking')}</button>}</span></div>)}</div>
+          <span className="row"><Badge kind={x.status}>{t('s_' + x.status)}</Badge>{['requested', 'assigned'].includes(x.status) && <Btn v="ghost sm" onClick={() => cancelT(x.id)}>{t('cancelBooking')}</Btn>}</span></div>)}</div>
       </div>
     </div>
   );
@@ -177,7 +178,7 @@ export function Chat({ cid }: { cid: number }) {
       <div className="msgs" ref={box}>
         {msgs.map(m => <div key={m.id} className={`msg ${m.kind === 'system' ? 'system' : m.sender_id === user?.id ? 'mine' : ''}`}><div className="who">{m.kind === 'system' ? t('system') : m.sender_name} · {fmtTime(m.created_at)}</div>{m.text}</div>)}
       </div>
-      <form onSubmit={send}><input value={text} onChange={e => setText(e.target.value)} placeholder={t('typeMessage')} /><button className="btn">{t('sendMessage')}</button></form>
+      <form onSubmit={send}><input value={text} onChange={e => setText(e.target.value)} placeholder={t('typeMessage')} /><Btn v="">{t('sendMessage')}</Btn></form>
     </div>
   );
 }

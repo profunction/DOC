@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { db, encrypt, decrypt, audit, nowIso } from './db.js';
 import { sign, requireAuth, requireRole, clientIdsFor, canSeeClient } from './auth.js';
 import { subscribe, broadcastClient } from './events.js';
+import { pushNtfy, traccarHandler, integrationStatus } from './integrations.js';
 
 export const api = Router();
 const pub = Router();
@@ -61,6 +62,7 @@ api.post('/auth/login', (req, res) => {
   res.json({ token: sign(u), user: safeUser(u) });
 });
 api.use('/public', pub);
+api.post('/integrations/traccar', traccarHandler);
 
 // ---------- 需要登录 ----------
 api.use(requireAuth);
@@ -151,6 +153,7 @@ api.post('/alerts', (req, res) => {
   const client = db.prepare('SELECT name FROM clients WHERE id = ?').get(clientId);
   broadcastClient(clientId, 'alert', { ...alert, client_name: client?.name });
   systemMessage(clientId, `🚨 ${client?.name} 发出${labelType(type)}（来源：${source}）。协调中心已收到，会在三分钟内回电。`);
+  pushNtfy({ title: `🚨 ${client?.name} ${labelType(type)}`, message: `来源：${source}${b.lat ? `\n位置：https://www.google.com/maps?q=${b.lat},${b.lng}` : ''}` });
   res.json(alert);
 });
 function labelType(t) {
@@ -372,6 +375,7 @@ api.get('/audit', requireRole('coordinator'), (req, res) => res.json(db.prepare(
 api.get('/dashboard', requireRole('coordinator'), (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   res.json({
+    integrations: integrationStatus(),
     clients: db.prepare('SELECT COUNT(*) AS n FROM clients WHERE active = 1').get().n,
     openAlerts: db.prepare(`SELECT COUNT(*) AS n FROM alerts WHERE status != 'resolved'`).get().n,
     todayTasks: db.prepare(`SELECT COUNT(*) AS n FROM tasks WHERE substr(scheduled_at,1,10) = ? AND status != 'cancelled'`).get(today).n,

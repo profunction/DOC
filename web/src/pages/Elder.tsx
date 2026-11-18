@@ -1,10 +1,12 @@
 // 长者端：三个大按钮。紧急求助 → 定位 + 通知协调员与子女。
 import { useEffect, useRef, useState } from 'react';
 import { Geolocation } from '@capacitor/geolocation';
+import { IonContent, IonIcon, IonPage } from '@ionic/react';
+import { callOutline, calendarOutline, logoWhatsapp, warningOutline } from 'ionicons/icons';
 import { useT, LANGS } from '../i18n';
 import { useStore } from '../store';
 import { api, fmtTime, isNative } from '../api';
-import { telLink, waLink } from '../components/ui';
+import { telLink, waLink, Btn } from '../components/ui';
 
 type Sheet = null | 'sos' | 'find' | 'plan';
 
@@ -70,10 +72,10 @@ export default function Elder() {
   const statusText: Record<string, string> = { new: t('sosSent'), acknowledged: `☎️ ${t('as_acknowledged')}`, dispatched: `🚗 ${t('as_dispatched')}`, resolved: `✅ ${t('as_resolved')}` };
 
   return (
-    <div className="elder">
+    <IonPage><IonContent fullscreen><div className="elder">
       <div className="lang-row">
-        {LANGS.map(l => <button key={l.id} className={`btn sm ${lang === l.id ? '' : 'ghost'}`} onClick={() => setLang(l.id)}>{l.label}</button>)}
-        <button className="btn sm ghost" onClick={logout}>{t('logout')}</button>
+        {LANGS.map(l => <Btn key={l.id} v={`sm ${lang === l.id ? '' : 'ghost'}`} onClick={() => setLang(l.id)}>{l.label}</Btn>)}
+        <Btn v="sm ghost" onClick={logout}>{t('logout')}</Btn>
       </div>
       <div className="hello">{t('elderHello')}，{summary?.client?.name || user?.name}</div>
       {summary?.openAlerts?.length > 0 && sheet !== 'sos' && (
@@ -82,11 +84,11 @@ export default function Elder() {
       <div className="big-btns">
         <button className={`big sos ${hold > 0 ? 'holding' : ''}`}
           onPointerDown={startHold} onPointerUp={stopHold} onPointerLeave={stopHold} onPointerCancel={stopHold} onContextMenu={e => e.preventDefault()}>
-          🆘 {t('sos')}
+          <span className="big-ic"><IonIcon icon={warningOutline} /></span>{t('sos')}
           {hold > 0 ? <div className="progress"><div style={{ width: `${hold}%` }} /></div> : <span className="sub">{t('sosHint')}</span>}
         </button>
-        <button className="big find" onClick={() => setSheet('find')}>📞 {t('findSomeone')}</button>
-        <button className="big plan" onClick={() => { load(); setSheet('plan'); }}>📅 {t('todayPlan')}</button>
+        <button className="big find" onClick={() => setSheet('find')}><IonIcon icon={callOutline} /> {t('findSomeone')}</button>
+        <button className="big plan" onClick={() => { load(); setSheet('plan'); }}><IonIcon icon={calendarOutline} /> {t('todayPlan')}</button>
       </div>
 
       {sheet === 'sos' && (
@@ -95,8 +97,8 @@ export default function Elder() {
           {sosState === 'sent' && <><h2>{alertStatus === 'new' ? '✅ ' : ''}{statusText[alertStatus]}</h2><p>{t('sosSentHint')}</p></>}
           {sosState === 'failed' && <h2 style={{ color: 'var(--danger)' }}>⚠️ {t('sosFailed')}</h2>}
           <div className="stack" style={{ marginTop: '1rem' }}>
-            <a className="btn block danger" href={telLink(hotline)}>📞 {t('callCenter')}</a>
-            <button className="btn block ghost" onClick={cancelSos}>{t('cancelSos')}</button>
+            <Btn v="block danger" href={telLink(hotline)}>📞 {t('callCenter')}</Btn>
+            <Btn v="block ghost" onClick={cancelSos}>{t('cancelSos')}</Btn>
           </div>
         </div>
       )}
@@ -104,10 +106,10 @@ export default function Elder() {
         <div className="sheet">
           <h2>📞 {t('findSomeone')}</h2>
           <div className="stack">
-            <a className="btn block" href={telLink(hotline)}>📞 {t('callCenter')}</a>
-            <a className="btn block ok" href={waLink(hotline, `${user?.name}：我要找人`)} target="_blank" rel="noreferrer">💬 {t('whatsapp')}</a>
+            <Btn v="block" href={telLink(hotline)}>📞 {t('callCenter')}</Btn>
+            <Btn v="block ok" href={waLink(hotline, `${user?.name}：我要找人`)} target="_blank" rel="noreferrer"><IonIcon slot="start" icon={logoWhatsapp} />{t('whatsapp')}</Btn>
             {summary?.client?.emergency_contact && <div className="plan-item"><b>{t('emergencyContact')}</b>{summary.client.emergency_contact}</div>}
-            <button className="btn block ghost" onClick={() => setSheet(null)}>{t('close')}</button>
+            <Btn v="block ghost" onClick={() => setSheet(null)}>{t('close')}</Btn>
           </div>
         </div>
       )}
@@ -120,9 +122,9 @@ export default function Elder() {
           ))}
           {summary?.upcoming?.length > 0 && <><h3 style={{ marginTop: '1rem' }}>{t('upcoming')}</h3>
             {summary.upcoming.map((x: any) => <div className="plan-item" key={x.id}><b>{fmtTime(x.scheduled_at)}</b>{x.title}</div>)}</>}
-          <button className="btn block ghost" style={{ marginTop: '1rem' }} onClick={() => setSheet(null)}>{t('close')}</button>
+          <Btn v="block ghost" style={{ marginTop: '1rem' }} onClick={() => setSheet(null)}>{t('close')}</Btn>
         </div>
       )}
-    </div>
+    </div></IonContent></IonPage>
   );
 }

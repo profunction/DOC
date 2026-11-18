@@ -17,7 +17,7 @@ const login = async (phone) => (await j('/auth/login', { body: { phone, password
 
 before(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'anxin-test-'));
-  proc = spawn(process.execPath, ['src/index.js'], { env: { ...process.env, PORT: String(PORT), DATA_DIR: tmp, JWT_SECRET: 'test', WEB_DIR: '/nonexistent' }, stdio: 'ignore' });
+  proc = spawn(process.execPath, ['src/index.js'], { env: { ...process.env, PORT: String(PORT), DATA_DIR: tmp, JWT_SECRET: 'test', WEB_DIR: '/nonexistent', TRACCAR_KEY: 'test-traccar' }, stdio: 'ignore' });
   for (let i = 0; i < 50; i++) { try { await fetch(B + '/public/info'); return; } catch { await new Promise(r => setTimeout(r, 200)); } }
   throw new Error('server did not start');
 });
@@ -82,4 +82,17 @@ test('public enquiry is stored for the coordinator', async () => {
   assert.equal((await j('/public/enquiry', { body: { name: 'T', phone: '0123' } })).status, 200);
   const coord = await login('0100000001');
   assert.ok((await j('/enquiries', {}, coord)).data.some(e => e.phone === '0123'));
+});
+
+test('Traccar watch event creates a watch alert for the matching client', async () => {
+  const bad = await fetch(B + '/integrations/traccar?key=wrong', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+  assert.equal(bad.status, 401);
+  const r = await fetch(B + '/integrations/traccar?key=test-traccar', { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ event: { type: 'alarm', attributes: { alarm: 'fallDown' } }, device: { uniqueId: 'WT-0002', name: 'Watch 2' }, position: { latitude: 1.53, longitude: 103.63 } }) });
+  assert.equal(r.status, 200);
+  const coord = await login('0100000001');
+  const open = (await j('/alerts?status=open', {}, coord)).data;
+  const a = open.find(x => x.source === 'watch' && x.type === 'fall' && x.client_id === 2);
+  assert.ok(a, 'watch alert for client 2');
+  assert.equal(a.lat, 1.53);
 });

@@ -1,0 +1,3 @@
+这些 SVG 来自 unDraw（https://undraw.co），由 Katerina Limpitsouni 创作。
+unDraw 许可：可免费用于商业与非商业项目，无需署名，不得作为素材库转售。
+主色已替换为本项目品牌色 #0b5e55。

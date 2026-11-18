@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type CSSProperties, type MouseEvent } from 'react';
+import { IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonIcon, IonLabel, IonPage, IonSegment, IonSegmentButton, IonTabBar, IonTabButton, IonTitle, IonToolbar } from '@ionic/react';
+import { logOutOutline } from 'ionicons/icons';
 import { useT, LANGS, type Lang } from '../i18n';
 import { useStore } from '../store';
 import { api, ApiError } from '../api';
@@ -6,34 +8,55 @@ import { api, ApiError } from '../api';
 export function LangSelect({ light }: { light?: boolean }) {
   const { lang, setLang } = useT();
   return (
-    <select value={lang} onChange={e => setLang(e.target.value as Lang)} aria-label="language" style={light ? undefined : { padding: '.3rem', borderRadius: 8 }}>
+    <select className={`lang-select ${light ? 'light' : ''}`} value={lang} onChange={e => setLang(e.target.value as Lang)} aria-label="language">
       {LANGS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
     </select>
   );
 }
 
-export function Shell({ title, tabs, tab, onTab, children, right }: { title: string; tabs: { id: string; label: string; icon: string }[]; tab: string; onTab: (id: string) => void; children: ReactNode; right?: ReactNode }) {
-  const { t } = useT();
+export interface Tab { id: string; label: string; icon: string }
+
+/** 应用外壳：Ionic 顶栏 + 分段标签 + 手机底部标签栏 */
+export function Shell({ title, tabs, tab, onTab, children, right }: { title: string; tabs: Tab[]; tab: string; onTab: (id: string) => void; children: ReactNode; right?: ReactNode }) {
   const { logout, user } = useStore();
   return (
-    <div className="shell">
-      <header className="topbar">
-        <span className="title">{title}</span>
-        <span className="small" style={{ opacity: .85 }}>{user?.name}</span>
-        {right}
-        <LangSelect light />
-        <button className="btn" onClick={logout}>{t('logout')}</button>
-      </header>
-      <main className="main">
-        <div className="tabs" role="tablist">
-          {tabs.map(x => <button key={x.id} className={tab === x.id ? 'active' : ''} onClick={() => onTab(x.id)}>{x.icon} {x.label}</button>)}
-        </div>
-        {children}
-      </main>
-      <nav className="bottom-nav">
-        {tabs.slice(0, 5).map(x => <button key={x.id} className={tab === x.id ? 'active' : ''} onClick={() => onTab(x.id)}><span className="ic">{x.icon}</span>{x.label}</button>)}
-      </nav>
-    </div>
+    <IonPage>
+      <IonHeader>
+        <IonToolbar color="primary">
+          <IonTitle>{title}</IonTitle>
+          <IonButtons slot="end">
+            <span className="topbar-user">{user?.name}</span>
+            {right}
+            <LangSelect light />
+            <IonButton onClick={logout} title="logout"><IonIcon slot="icon-only" icon={logOutOutline} /></IonButton>
+          </IonButtons>
+        </IonToolbar>
+        <IonToolbar className="sub" color="primary">
+          <IonSegment scrollable value={tab} onIonChange={e => e.detail.value && onTab(String(e.detail.value))}>
+            {tabs.map(x => <IonSegmentButton key={x.id} value={x.id}><IonIcon icon={x.icon} /><IonLabel>{x.label}</IonLabel></IonSegmentButton>)}
+          </IonSegment>
+        </IonToolbar>
+      </IonHeader>
+      <IonContent className="ion-padding">{children}</IonContent>
+      <IonFooter>
+        <IonTabBar selectedTab={tab}>
+          {tabs.slice(0, 5).map(x => <IonTabButton key={x.id} tab={x.id} selected={tab === x.id} onClick={() => onTab(x.id)}><IonIcon icon={x.icon} /><IonLabel>{x.label}</IonLabel></IonTabButton>)}
+        </IonTabBar>
+      </IonFooter>
+    </IonPage>
+  );
+}
+
+/** 按钮：v 里写旧的修饰词（sm / ghost / secondary / danger / ok / block），映射到 IonButton */
+export function Btn({ v = '', children, type, onClick, href, target, rel, disabled, style, className, title }: {
+  v?: string; children?: ReactNode; type?: 'button' | 'submit' | 'reset'; onClick?: (e: MouseEvent<HTMLIonButtonElement>) => void; href?: string; target?: string; rel?: string; disabled?: boolean; style?: CSSProperties; className?: string; title?: string;
+}) {
+  const t = v.split(' ').filter(Boolean);
+  const fill = t.includes('ghost') || t.includes('secondary') ? 'outline' : 'solid';
+  const color = t.includes('danger') ? 'danger' : t.includes('ok') ? 'success' : t.includes('ghost') ? 'medium' : 'primary';
+  return (
+    <IonButton type={type ?? (onClick || href ? 'button' : 'submit')} fill={fill} color={color} size={t.includes('sm') ? 'small' : 'default'} expand={t.includes('block') ? 'block' : undefined}
+      onClick={onClick} href={href} target={target} rel={rel} disabled={disabled} style={style} className={className} title={title}>{children}</IonButton>
   );
 }
 

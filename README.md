@@ -30,6 +30,29 @@ DOC/
 - **三语**：中文 / English / Bahasa Melayu，网站与 App 均可切换。
 - **长者端只有三个大按钮**：紧急求助、我要找人（打热线 / WhatsApp）、看今天的安排。
 
+## 用到的开源项目（直接接进来的）
+
+| 用途 | 项目 | 许可 | 在哪里 |
+|---|---|---|---|
+| App 界面组件（顶栏、分段标签、底部标签栏、按钮、卡片） | [Ionic Framework](https://ionicframework.com) | MIT | `web/src/components/ui.tsx`、`web/src/theme.css` |
+| App 图标 | [Ionicons](https://ionic.io/ionicons) | MIT | 各页面 tabs |
+| 网站图标 | [Lucide](https://lucide.dev) | ISC | `web/src/pages/Landing.tsx` |
+| 网站插画 | [unDraw](https://undraw.co) | unDraw 许可（可商用） | `web/public/illustrations/` |
+| 中文字体 | Noto Sans SC（Google Fonts） | OFL | `web/index.html` |
+| 手表 GPS / SOS / 跌倒事件 | [Traccar](https://www.traccar.org) | Apache-2.0 | `server/src/integrations.js`、`docker-compose.stack.yml`、`deploy/traccar.xml` |
+| App 关着也能收到的推送 | [ntfy](https://ntfy.sh) | Apache-2.0 | `server/src/integrations.js`、`docker-compose.stack.yml` |
+| 安卓壳 | [Capacitor](https://capacitorjs.com) | MIT | `web/android/` |
+
+一键把 Traccar 和 ntfy 一起跑起来：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.stack.yml up -d --build
+```
+
+- Traccar 后台在 8082 端口（默认 admin / admin，马上改），把手表的服务器地址指到这台机器对应品牌的端口，在客人档案"智能手表"栏填手表的 IMEI；手表一按 SOS，协调员页面就会弹警报。
+- ntfy 在 8090 端口；协调员手机装开源 ntfy App，订阅 `.env` 里的 `NTFY_TOPIC`，所有警报都会推到手机，App 关着也能收。
+- 第一阶段若不想自己开发，也可以只用 Chatwoot（WhatsApp 热线）+ Baserow（表格）+ KoboCollect（上门表单）+ Traccar + ntfy，见 `docs/开源组合.md`。
+
 ## 本地运行
 
 ```bash
@@ -98,7 +121,7 @@ cd server && npm test     # 后端：权限隔离、加密、SOS 流程、派单
 
 ## 还没做 / 下一步
 
-- 推送通知目前是 App 在前台时的本地通知 + 实时连接；要在 App 完全关闭时也收到，需接 Firebase Cloud Messaging（需要 Google 账号与 `google-services.json`）。
-- 智能手表厂商的数据接口需按厂家协议写一个接收端点（`POST /api/alerts` 已可直接复用，加一个厂家密钥校验即可）。
+- App 内推送目前是前台实时连接 + 本地通知；App 关闭时的推送已通过 ntfy 解决（协调员装 ntfy App）。若要在本 App 内收到，需再接 Firebase Cloud Messaging。
+- 手表接入已通过 Traccar 完成（`POST /api/integrations/traccar`）；跌倒感应能否被解析取决于手表型号，拿到样品后用 Traccar 实测。
 - iOS 版：`npx cap add ios`，需要 Mac 与 Apple 开发者账号。
 - 在线付款（FPX / 信用卡）、照片上传到探访报告。

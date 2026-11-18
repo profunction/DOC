@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { IonApp } from '@ionic/react';
 import { useStore } from './store';
 import { isNative } from './api';
 import Landing from './pages/Landing';
@@ -9,12 +10,13 @@ import Coordinator from './pages/Coordinator';
 import Caregiver from './pages/Caregiver';
 import Legal from './pages/Legal';
 
+const ROLE_HOME = { elder: '/app/elder', family: '/app/family', coordinator: '/app/coord', caregiver: '/app/caregiver' } as const;
+
 function AppHome() {
   const { user, ready } = useStore();
   if (!ready) return <p style={{ padding: '2rem', textAlign: 'center' }}>…</p>;
   if (!user) return <Navigate to="/app/login" replace />;
-  const map = { elder: '/app/elder', family: '/app/family', coordinator: '/app/coord', caregiver: '/app/caregiver' } as const;
-  return <Navigate to={map[user.role]} replace />;
+  return <Navigate to={ROLE_HOME[user.role]} replace />;
 }
 
 function Guard({ role, children }: { role: string; children: JSX.Element }) {
@@ -25,6 +27,22 @@ function Guard({ role, children }: { role: string; children: JSX.Element }) {
   return children;
 }
 
+function AppShell() {
+  return (
+    <IonApp>
+      <Routes>
+        <Route index element={<AppHome />} />
+        <Route path="login" element={<Login />} />
+        <Route path="elder" element={<Guard role="elder"><Elder /></Guard>} />
+        <Route path="family" element={<Guard role="family"><Family /></Guard>} />
+        <Route path="coord" element={<Guard role="coordinator"><Coordinator /></Guard>} />
+        <Route path="caregiver" element={<Guard role="caregiver"><Caregiver /></Guard>} />
+        <Route path="*" element={<Navigate to="/app" replace />} />
+      </Routes>
+    </IonApp>
+  );
+}
+
 export default function App() {
   const loc = useLocation();
   // 手机 App 里不显示宣传网站，直接进入应用
@@ -33,12 +51,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/legal" element={<Legal />} />
-      <Route path="/app" element={<AppHome />} />
-      <Route path="/app/login" element={<Login />} />
-      <Route path="/app/elder" element={<Guard role="elder"><Elder /></Guard>} />
-      <Route path="/app/family" element={<Guard role="family"><Family /></Guard>} />
-      <Route path="/app/coord" element={<Guard role="coordinator"><Coordinator /></Guard>} />
-      <Route path="/app/caregiver" element={<Guard role="caregiver"><Caregiver /></Guard>} />
+      <Route path="/app/*" element={<AppShell />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

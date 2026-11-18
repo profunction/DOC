@@ -1,0 +1,36 @@
+# 完整开源组合：本系统 + Traccar（手表）+ ntfy（推送）。
+#   docker compose -f docker-compose.yml -f docker-compose.stack.yml up -d --build
+services:
+  anxin:
+    environment:
+      NTFY_URL: http://ntfy
+      NTFY_TOPIC: ${NTFY_TOPIC:-anxin-alerts}
+      TRACCAR_KEY: ${TRACCAR_KEY:?请在 .env 设置}
+    depends_on: [ntfy]
+
+  traccar:                      # https://www.traccar.org  Apache-2.0
+    image: traccar/traccar:6.5-alpine
+    ports:
+      - "8082:8082"             # 网页后台（第一次登录 admin/admin，请马上改密码）
+      - "5000-5150:5000-5150"   # 各品牌手表的接入端口
+      - "5000-5150:5000-5150/udp"
+    volumes:
+      - traccar-data:/opt/traccar/data
+      - ./deploy/traccar.xml:/opt/traccar/conf/traccar.xml:ro
+    restart: unless-stopped
+
+  ntfy:                         # https://ntfy.sh  Apache-2.0
+    image: binwiederhier/ntfy:v2.11.0
+    command: serve
+    environment:
+      NTFY_BASE_URL: ${NTFY_BASE_URL:-http://localhost:8090}
+      NTFY_CACHE_FILE: /var/cache/ntfy/cache.db
+      NTFY_BEHIND_PROXY: "true"
+    ports: ["8090:80"]
+    volumes:
+      - ntfy-cache:/var/cache/ntfy
+    restart: unless-stopped
+
+volumes:
+  traccar-data:
+  ntfy-cache:

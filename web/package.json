@@ -17,8 +17,12 @@
     "@capacitor/core": "^7.0.0",
     "@capacitor/geolocation": "^7.0.0",
     "@capacitor/local-notifications": "^7.0.0",
+    "@ionic/react": "^9.0.12",
+    "ionicons": "^8.1.0",
+    "lucide-react": "^1.75.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-peeps": "^0.1.10",
     "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
