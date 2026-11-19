@@ -5,6 +5,8 @@ services:
     name: anxin-care
     runtime: docker
     plan: free
+    branch: claude/new-session-1skmg3     # 仓库目前只有这条分支；合并到 main 后改成 main
+    autoDeploy: true
     dockerfilePath: ./Dockerfile
     envVars:
       - key: PORT
