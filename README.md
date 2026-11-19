@@ -103,6 +103,8 @@ cd web && npm run android:release    # 正式签名版，复制到 downloads/anx
 
 ## 部署网站 + 后端
 
+手机 App 必须连到一个后端。最快的三种方法（同一 Wi-Fi 用电脑、Render 免费托管、自己的 VPS）见 `docs/部署.md`。
+
 ```bash
 cp server/.env.example .env   # 填 JWT_SECRET、DATA_KEY（openssl rand -hex 32）、HOTLINE_PHONE
 docker compose up -d --build  # http://服务器:8787，前面加 Caddy / Nginx 做 HTTPS

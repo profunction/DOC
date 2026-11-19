@@ -9,7 +9,7 @@ const zh = {
   // 通用
   login: '登录', logout: '退出', phone: '手机号', password: '密码', serverUrl: '服务器地址', save: '保存', cancel: '取消', submit: '提交', back: '返回', close: '关闭',
   loading: '载入中…', none: '暂无', today: '今天', upcoming: '接下来', all: '全部', status: '状态', time: '时间', type: '类型', notes: '备注', actions: '操作', name: '姓名', address: '地址', region: '地区', call: '打电话', whatsapp: 'WhatsApp', refresh: '刷新', add: '新增', edit: '编辑', search: '搜索', confirm: '确认', yes: '是', no: '否', language: '语言', retry: '重试',
-  networkError: '连不上服务器，请检查网络或服务器地址。', badCredentials: '手机号或密码不对。', forbidden: '没有权限。',
+  networkError: '连不上服务器，请检查网络或服务器地址。', serverRequired: '请先填写服务器地址（你部署后端的网址），再登录。', notApi: '这个地址不是安心照顾的后端，请检查服务器地址。', serverTest: '测试连接', serverOk: '连接成功', serverHint: '后端由你的团队部署；同一 Wi-Fi 测试可填电脑的 IP，如 192.168.1.10:8787。', badCredentials: '手机号或密码不对。', forbidden: '没有权限。',
   demoAccounts: '演示账号（密码都是 123456）', roleElder: '长者', roleFamily: '子女', roleCoordinator: '协调员', roleCaregiver: '照顾人',
   hotline: '协调中心热线',
   // 长者端
@@ -58,7 +58,7 @@ const en: typeof zh = {
   appName: 'AnXin Care', tagline: 'JB Elder Care Coordination',
   login: 'Log in', logout: 'Log out', phone: 'Phone', password: 'Password', serverUrl: 'Server URL', save: 'Save', cancel: 'Cancel', submit: 'Submit', back: 'Back', close: 'Close',
   loading: 'Loading…', none: 'Nothing yet', today: 'Today', upcoming: 'Upcoming', all: 'All', status: 'Status', time: 'Time', type: 'Type', notes: 'Notes', actions: 'Actions', name: 'Name', address: 'Address', region: 'Area', call: 'Call', whatsapp: 'WhatsApp', refresh: 'Refresh', add: 'Add', edit: 'Edit', search: 'Search', confirm: 'Confirm', yes: 'Yes', no: 'No', language: 'Language', retry: 'Retry',
-  networkError: 'Cannot reach the server. Check your network or server URL.', badCredentials: 'Wrong phone or password.', forbidden: 'Not allowed.',
+  networkError: 'Cannot reach the server. Check your network or server URL.', serverRequired: 'Enter the server URL (where your backend is deployed) before logging in.', notApi: 'That address is not an AnXin Care backend. Check the server URL.', serverTest: 'Test', serverOk: 'Connected', serverHint: 'The backend is hosted by your team; on the same Wi-Fi you can use your computer’s IP, e.g. 192.168.1.10:8787.', badCredentials: 'Wrong phone or password.', forbidden: 'Not allowed.',
   demoAccounts: 'Demo accounts (password 123456)', roleElder: 'Elder', roleFamily: 'Family', roleCoordinator: 'Coordinator', roleCaregiver: 'Caregiver',
   hotline: 'Coordination hotline',
   elderHello: 'Hello', sos: 'EMERGENCY', sosHint: 'Hold 2 seconds', findSomeone: 'I need someone', todayPlan: "Today's plan", sosSending: 'Notifying the coordinator…', sosSent: 'Sent! The coordinator will call you within 3 minutes.', sosSentHint: 'Keep your phone nearby.', sosFailed: 'Failed to send. Please call directly.', callCenter: 'Call the centre', cancelSos: "I'm fine, cancel", noPlanToday: 'Nothing planned today. Press "I need someone" anytime.', withWho: 'By', familyGroup: 'Family group',
@@ -101,7 +101,7 @@ const ms: typeof zh = {
   appName: 'AnXin Care', tagline: 'Penyelarasan Penjagaan Warga Emas JB',
   login: 'Log masuk', logout: 'Log keluar', phone: 'Telefon', password: 'Kata laluan', serverUrl: 'URL pelayan', save: 'Simpan', cancel: 'Batal', submit: 'Hantar', back: 'Kembali', close: 'Tutup',
   loading: 'Memuatkan…', none: 'Tiada lagi', today: 'Hari ini', upcoming: 'Akan datang', all: 'Semua', status: 'Status', time: 'Masa', type: 'Jenis', notes: 'Catatan', actions: 'Tindakan', name: 'Nama', address: 'Alamat', region: 'Kawasan', call: 'Telefon', whatsapp: 'WhatsApp', refresh: 'Muat semula', add: 'Tambah', edit: 'Sunting', search: 'Cari', confirm: 'Sahkan', yes: 'Ya', no: 'Tidak', language: 'Bahasa', retry: 'Cuba lagi',
-  networkError: 'Tidak dapat sambung ke pelayan. Semak rangkaian atau URL pelayan.', badCredentials: 'Telefon atau kata laluan salah.', forbidden: 'Tidak dibenarkan.',
+  networkError: 'Tidak dapat sambung ke pelayan. Semak rangkaian atau URL pelayan.', serverRequired: 'Masukkan URL pelayan (tempat backend anda) sebelum log masuk.', notApi: 'Alamat itu bukan backend AnXin Care. Semak URL pelayan.', serverTest: 'Uji', serverOk: 'Berjaya disambung', serverHint: 'Backend dihoskan oleh pasukan anda; dalam Wi-Fi yang sama boleh guna IP komputer, cth 192.168.1.10:8787.', badCredentials: 'Telefon atau kata laluan salah.', forbidden: 'Tidak dibenarkan.',
   demoAccounts: 'Akaun demo (kata laluan 123456)', roleElder: 'Warga emas', roleFamily: 'Keluarga', roleCoordinator: 'Penyelaras', roleCaregiver: 'Penjaga',
   hotline: 'Talian penyelarasan',
   elderHello: 'Selamat sejahtera', sos: 'KECEMASAN', sosHint: 'Tekan 2 saat', findSomeone: 'Saya perlukan orang', todayPlan: 'Jadual hari ini', sosSending: 'Memaklumkan penyelaras…', sosSent: 'Dihantar! Penyelaras akan telefon dalam 3 minit.', sosSentHint: 'Simpan telefon berdekatan.', sosFailed: 'Gagal dihantar. Sila telefon terus.', callCenter: 'Telefon pusat', cancelSos: 'Saya OK, batal', noPlanToday: 'Tiada jadual hari ini. Tekan "Saya perlukan orang" bila-bila masa.', withWho: 'Oleh', familyGroup: 'Kumpulan keluarga',

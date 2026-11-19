@@ -11,8 +11,23 @@ export function getApiBase(): string {
   if (isNative) return (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '';
   return (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '';
 }
+export function normalizeBase(url: string) {
+  let u = url.trim().replace(/\/+$/, '');
+  if (u && !/^https?:\/\//i.test(u)) u = (/^(localhost|\d+\.\d+\.\d+\.\d+)(:\d+)?$/.test(u) ? 'http://' : 'https://') + u;
+  return u;
+}
 export function setApiBase(url: string) {
-  if (url) localStorage.setItem(KEY_BASE, url.trim()); else localStorage.removeItem(KEY_BASE);
+  const u = normalizeBase(url);
+  if (u) localStorage.setItem(KEY_BASE, u); else localStorage.removeItem(KEY_BASE);
+}
+/** 测试服务器是否可用：返回热线号码表示成功 */
+export async function pingServer(base: string): Promise<string> {
+  const u = normalizeBase(base);
+  if (!u) throw new ApiError(0, 'no_server');
+  let res: Response;
+  try { res = await fetch(`${u}/api/public/info`, { headers: { accept: 'application/json' } }); } catch { throw new ApiError(0, 'network'); }
+  if (!res.ok || !(res.headers.get('content-type') || '').includes('application/json')) throw new ApiError(res.status, 'not_api');
+  return (await res.json()).hotline;
 }
 export function needsServerUrl() { return isNative && !getApiBase(); }
 export { isNative };
@@ -23,15 +38,17 @@ export function setToken(t: string) { if (t) localStorage.setItem(KEY_TOKEN, t);
 export class ApiError extends Error { status: number; code: string; constructor(status: number, code: string) { super(code); this.status = status; this.code = code; } }
 
 export async function api<T = any>(path: string, opts: { method?: string; body?: any; auth?: boolean } = {}): Promise<T> {
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' };
   const tok = getToken();
   if (opts.auth !== false && tok) headers.authorization = `Bearer ${tok}`;
+  if (isNative && !getApiBase()) throw new ApiError(0, 'no_server');
   let res: Response;
   try {
     res = await fetch(`${getApiBase()}/api${path}`, { method: opts.method || (opts.body ? 'POST' : 'GET'), headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
   } catch {
     throw new ApiError(0, 'network');
   }
+  if (!(res.headers.get('content-type') || '').includes('application/json')) throw new ApiError(res.status, 'not_api');
   if (!res.ok) {
     let code = 'error';
     try { code = (await res.json()).error || code; } catch { /* ignore */ }
