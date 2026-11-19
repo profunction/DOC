@@ -82,13 +82,19 @@ export default function Elder() {
         <div style={{ padding: '0 1.2rem' }}><div className="alert-banner">🚨 {t('openAlert')} · {statusText[summary.openAlerts[0].status]}</div></div>
       )}
       <div className="big-btns">
-        <button className={`big sos ${hold > 0 ? 'holding' : ''}`}
-          onPointerDown={startHold} onPointerUp={stopHold} onPointerLeave={stopHold} onPointerCancel={stopHold} onContextMenu={e => e.preventDefault()}>
-          <span className="big-ic"><IonIcon icon={warningOutline} /></span>{t('sos')}
-          {hold > 0 ? <div className="progress"><div style={{ width: `${hold}%` }} /></div> : <span className="sub">{t('sosHint')}</span>}
-        </button>
-        <button className="big find" onClick={() => setSheet('find')}><IonIcon icon={callOutline} /> {t('findSomeone')}</button>
-        <button className="big plan" onClick={() => { load(); setSheet('plan'); }}><IonIcon icon={calendarOutline} /> {t('todayPlan')}</button>
+        <div className="sos-wrap">
+          <span className="sos-ring r1" /><span className="sos-ring r2" />
+          <button className={`big sos ${hold > 0 ? 'holding' : ''}`} style={{ '--p': `${hold}%` } as any}
+            onPointerDown={startHold} onPointerUp={stopHold} onPointerLeave={stopHold} onPointerCancel={stopHold} onContextMenu={e => e.preventDefault()}>
+            <span className="sos-inner">
+              <IonIcon icon={warningOutline} />
+              <span className="sos-label">{t('sos')}</span>
+              <span className="sub">{hold > 0 ? `${Math.ceil((100 - hold) / 50)}…` : t('sosHint')}</span>
+            </span>
+          </button>
+        </div>
+        <button className="big find" onClick={() => setSheet('find')}><span className="ic"><IonIcon icon={callOutline} /></span><span className="txt">{t('findSomeone')}<small>{t('callCenter')} · WhatsApp</small></span><span className="chev">›</span></button>
+        <button className="big plan" onClick={() => { load(); setSheet('plan'); }}><span className="ic"><IonIcon icon={calendarOutline} /></span><span className="txt">{t('todayPlan')}<small>{summary?.todayTasks?.length ? `${t('today')} · ${summary.todayTasks.length}` : t('noPlanToday').split('。')[0]}</small></span><span className="chev">›</span></button>
       </div>
 
       {sheet === 'sos' && (

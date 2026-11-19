@@ -78,18 +78,28 @@ ion-button + ion-button { margin-left: 0; }
 .stat.alert .n { color: var(--accent); }
 
 /* 长者端：超大字体 */
-.elder { --ink: #111; font-size: 22px; min-height: 100%; display: flex; flex-direction: column; background: #fffdf7; }
+.elder { --ink: #111; font-size: 22px; min-height: 100%; display: flex; flex-direction: column; background: linear-gradient(180deg, #e8f3f0 0%, #fffdf7 38%); }
 .elder .hello { padding: 1.2rem 1.2rem .4rem; font-size: 1.5rem; font-weight: 700; }
-.elder .big-btns { display: grid; gap: 1rem; padding: 1rem 1.2rem; flex: 1; grid-template-rows: 2fr 1fr 1fr; }
-.elder .big { border: 0; border-radius: 24px; color: #fff; font-size: 2rem; font-weight: 800; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .4rem; box-shadow: 0 6px 18px rgba(0,0,0,.12); cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; }
-.elder .big .sub { font-size: 1rem; font-weight: 500; opacity: .9; }
-.elder .big ion-icon { font-size: 2.2rem; vertical-align: -0.35rem; margin-right: .3rem; }
-.elder .big .big-ic ion-icon { font-size: 4rem; margin: 0; display: block; }
-.elder .big.sos { gap: .2rem; }
-.elder .big.sos { background: radial-gradient(circle at 50% 30%, #ff6b4a, #d9480f 70%); font-size: 2.6rem; }
-.elder .big.sos.holding { transform: scale(.97); background: radial-gradient(circle at 50% 30%, #ff8c70, #b43a0a 70%); }
-.elder .big.find { background: var(--brand); }
-.elder .big.plan { background: #1864ab; }
+.elder .big-btns { display: flex; flex-direction: column; gap: 1rem; padding: .6rem 1.2rem 1.6rem; flex: 1; }
+.elder .sos-wrap { position: relative; display: flex; align-items: center; justify-content: center; flex: 1; min-height: 300px; }
+.elder .sos-ring { position: absolute; border-radius: 50%; border: 2px solid rgba(217,72,15,.35); width: 290px; height: 290px; animation: ring 2.4s ease-out infinite; }
+.elder .sos-ring.r2 { animation-delay: 1.2s; }
+@keyframes ring { 0% { transform: scale(.82); opacity: .9; } 100% { transform: scale(1.25); opacity: 0; } }
+.elder .big { border: 0; color: #fff; font-weight: 800; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; }
+.elder .big.sos { position: relative; width: 250px; height: 250px; border-radius: 50%; padding: 8px; background: conic-gradient(#fff var(--p, 0%), rgba(217,72,15,.28) 0); box-shadow: 0 18px 40px rgba(217,72,15,.35), 0 0 0 12px rgba(217,72,15,.08); transition: transform .12s; }
+.elder .big.sos.holding { transform: scale(.95); }
+.elder .sos-inner { width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 28%, #ff7a55, #d9480f 72%); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .15rem; box-shadow: inset 0 -8px 18px rgba(0,0,0,.15), inset 0 6px 14px rgba(255,255,255,.18); }
+.elder .sos-inner ion-icon { font-size: 3.2rem; }
+.elder .sos-label { font-size: 2.1rem; line-height: 1.15; letter-spacing: .02em; }
+.elder .sos-inner .sub { font-size: .95rem; font-weight: 500; opacity: .92; }
+.elder .big.find, .elder .big.plan { display: flex; align-items: center; gap: 1rem; text-align: left; padding: 1.1rem 1.1rem 1.1rem 1rem; border-radius: 22px; min-height: 112px; box-shadow: 0 8px 22px rgba(0,0,0,.12); }
+.elder .big.find { background: linear-gradient(135deg, #0e7a6e, #0b5e55); }
+.elder .big.plan { background: linear-gradient(135deg, #2a7ac7, #1864ab); }
+.elder .big .ic { flex: 0 0 68px; width: 68px; height: 68px; border-radius: 50%; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; }
+.elder .big .ic ion-icon { font-size: 2rem; }
+.elder .big .txt { flex: 1; font-size: 1.7rem; line-height: 1.15; display: flex; flex-direction: column; gap: .2rem; }
+.elder .big .txt small { font-size: .9rem; font-weight: 500; opacity: .85; }
+.elder .big .chev { font-size: 2.2rem; opacity: .6; font-weight: 400; }
 .elder .sheet { background: #fff; border-radius: 24px 24px 0 0; padding: 1.4rem 1.2rem 2rem; box-shadow: 0 -4px 20px rgba(0,0,0,.1); }
 .elder .sheet h2 { font-size: 1.6rem; }
 .elder .sheet ion-button { font-size: 1.25rem; height: 64px; --border-radius: 16px; margin: 0; }

@@ -101,7 +101,7 @@ cp server/.env.example .env   # 填 JWT_SECRET、DATA_KEY（openssl rand -hex 32
 docker compose up -d --build  # http://服务器:8787，前面加 Caddy / Nginx 做 HTTPS
 ```
 
-把打好的 APK 放到 `web/public/downloads/anxin-care.apk`（或设 `VITE_APK_URL`），网站"下载 App"按钮即可用。
+打好的 APK 放在仓库根目录 `downloads/anxin-care.apk`，后端会以 `/downloads/` 提供，网站"下载 App"按钮直接指向它（也可设 `VITE_APK_URL` 指向别处）。
 
 ## 测试
 

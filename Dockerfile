@@ -10,12 +10,13 @@ ARG VITE_APK_URL=/downloads/anxin-care.apk
 RUN npm run build
 
 FROM node:22-bookworm-slim
-ENV NODE_ENV=production PORT=8787 DATA_DIR=/data WEB_DIR=/app/web
+ENV NODE_ENV=production PORT=8787 DATA_DIR=/data WEB_DIR=/app/web DOWNLOADS_DIR=/app/downloads
 WORKDIR /app/server
 COPY server/package*.json ./
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && npm ci --omit=dev && apt-get purge -y python3 make g++ && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 COPY server/ ./
 COPY --from=web /src/web/dist /app/web
+COPY downloads/ /app/downloads/
 VOLUME ["/data"]
 EXPOSE 8787
 CMD ["node", "src/index.js"]

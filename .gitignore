@@ -4,7 +4,6 @@ dist/
 .env
 server/data/*.db
 server/data/*.db-*
-web/public/downloads/*.apk.tmp
 web/android/app/build/
 web/android/build/
 web/android/.gradle/
