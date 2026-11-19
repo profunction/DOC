@@ -64,7 +64,7 @@ export function useErr() {
   const { t } = useT();
   const [err, setErr] = useState('');
   const show = (e: any) => {
-    if (e instanceof ApiError) setErr(e.code === 'network' ? t('networkError') : e.code === 'no_server' ? t('serverRequired') : e.code === 'not_api' ? t('notApi') : e.code === 'bad_credentials' ? t('badCredentials') : e.code === 'forbidden' ? t('forbidden') : `${e.status} ${e.code}`);
+    if (e instanceof ApiError) setErr(e.code === 'network' ? t('networkError') : e.code === 'no_server' ? t('serverRequired') : e.code === 'not_configured' ? t('notConfigured') : e.code === 'not_api' ? t('notApi') : e.code === 'bad_credentials' ? t('badCredentials') : e.code === 'forbidden' ? t('forbidden') : `${e.status} ${e.code}`);
     else setErr(String(e?.message || e));
   };
   return { err, setErr, show, Err: err ? <div className="error">{err}</div> : null };

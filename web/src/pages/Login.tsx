@@ -18,7 +18,12 @@ export default function Login() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [server, setServer] = useState(getApiBase());
-  const [showServer, setShowServer] = useState(isNative && !getApiBase());
+  // 正式版把服务器地址写死（VITE_API_BASE），顾客看不到地址栏；开发者连点 logo 7 下才显示
+  const BUILT_IN = Boolean(import.meta.env.VITE_API_BASE);
+  const [showServer, setShowServer] = useState(false);
+  const [taps, setTaps] = useState(0);
+  const notConfigured = isNative && !getApiBase();
+  function tapLogo() { const n = taps + 1; setTaps(n); if (n >= 7) { setShowServer(true); setTaps(0); } }
   const [busy, setBusy] = useState(false);
   const [ping, setPing] = useState('');
   const { Err, show, setErr } = useErr();
@@ -31,7 +36,7 @@ export default function Login() {
     e.preventDefault(); setErr(''); setBusy(true);
     try {
       if (showServer) setApiBase(server);
-      if (isNative && !getApiBase()) { setShowServer(true); throw new ApiError(0, 'no_server'); }
+      if (isNative && !getApiBase()) throw new ApiError(0, showServer ? 'no_server' : 'not_configured');
       await login(phone.trim(), password);
       nav('/app', { replace: true });
     } catch (err) { show(err); } finally { setBusy(false); }
@@ -41,10 +46,11 @@ export default function Login() {
     <IonPage><IonContent><div style={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
       <div className="card login-card" style={{ width: '100%', maxWidth: 420 }}>
         <div className="row between" style={{ marginBottom: '.8rem' }}>
-          <div className="row"><img src="/icon.svg" alt="" width={36} height={36} /><div><b>{t('appName')}</b><div className="small muted">{t('tagline')}</div></div></div>
+          <div className="row" onClick={tapLogo} style={{ cursor: 'default' }}><img src="/icon.svg" alt="" width={36} height={36} /><div><b>{t('appName')}</b><div className="small muted">{t('tagline')}</div></div></div>
           <LangSelect />
         </div>
         <h2>{t('login')}</h2>
+        {notConfigured && !showServer && <div className="error">{t('notConfigured')}</div>}
         {Err}
         <form onSubmit={submit}>
           <div className="field"><label>{t('phone')}</label><input inputMode="tel" autoComplete="username" value={phone} onChange={e => setPhone(e.target.value)} placeholder="0123456789" required /></div>
@@ -55,10 +61,8 @@ export default function Login() {
             <p className="small muted" style={{ marginTop: '.3rem' }}>{t('serverHint')}</p></div>}
           <Btn v="block" disabled={busy}>{busy ? t('loading') : t('login')}</Btn>
         </form>
-        <p className="small muted" style={{ marginTop: '.8rem' }}>
-          <Btn v="ghost sm" type="button" onClick={() => setShowServer(s => !s)}>{t('serverUrl')}</Btn>
-          {!isNative && <>&nbsp;·&nbsp;<Link to="/">← {t('tagline')}</Link></>}
-        </p>
+        {!isNative && <p className="small muted" style={{ marginTop: '.8rem' }}><Link to="/">← {t('tagline')}</Link></p>}
+        {showServer && <p className="small muted">{BUILT_IN ? `${t('serverUrl')}: ${import.meta.env.VITE_API_BASE}` : ''}</p>}
         <details style={{ marginTop: '.6rem' }}>
           <summary className="small muted">{t('demoAccounts')}</summary>
           <div className="stack" style={{ marginTop: '.5rem' }}>

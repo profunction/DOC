@@ -96,7 +96,7 @@ cd web && npm run android:release    # 正式签名版，复制到 downloads/anx
 需要 JDK 21 与 Android SDK（platform 35、build-tools 35.0.0），在 `web/android/local.properties` 写 `sdk.dir=/你的/android-sdk`。
 产物在 `web/android/app/build/outputs/apk/debug/app-debug.apk`。
 
-手机 App 需要知道后端地址：打包时设 `VITE_API_BASE=https://你的域名`，或在登录页点"服务器地址"手动填写。
+手机 App 的后端地址必须在打包时写死：`VITE_API_BASE=https://你的域名 npm run android:release`。没写死的包登录页会显示"App 还没有绑定服务器"；开发者连点登录页 logo 七下可临时填地址调试。顾客永远不需要填任何地址。
 
 也可以不装任何东西：把代码推到 GitHub，Actions 会自动打 APK 并放在 Artifacts；打 tag `v1.0.0` 会自动生成 Release。
 在仓库 Settings → Variables 设 `API_BASE`、`HOTLINE`、`APK_URL`；要签名正式版再加 Secrets `ANDROID_KEYSTORE_B64` 等（见工作流文件）。
