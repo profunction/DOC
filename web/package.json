@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "android:sync": "npm run build && npx cap sync android",
-    "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug && mkdir -p ../../downloads && cp app/build/outputs/apk/debug/app-debug.apk ../../downloads/anxin-care.apk && ls -la ../../downloads/"
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug && ls -la app/build/outputs/apk/debug/",
+    "android:release": "npm run android:sync && cd android && ./gradlew assembleRelease && mkdir -p ../../downloads && cp app/build/outputs/apk/release/app-release.apk ../../downloads/anxin-care.apk && ls -la ../../downloads/"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",

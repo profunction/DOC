@@ -67,3 +67,22 @@ export function fmtTime(s?: string | null) {
   return s.replace('T', ' ').slice(0, 16);
 }
 export function today() { return new Date().toISOString().slice(0, 10); }
+
+/** 受保护的图片地址：<img> 无法带 Authorization，改用 token 查询参数 */
+export function photoUrl(u: string) { return `${getApiBase()}${u}?token=${encodeURIComponent(getToken())}`; }
+
+/** 把用户选的图片压到 1280px 以内的 JPEG data URL，减少流量 */
+export function compressImage(file: File, max = 1280, quality = 0.8): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad_image')); };
+    img.src = url;
+  });
+}

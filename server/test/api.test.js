@@ -96,3 +96,18 @@ test('Traccar watch event creates a watch alert for the matching client', async 
   assert.ok(a, 'watch alert for client 2');
   assert.equal(a.lat, 1.53);
 });
+
+test('caregiver uploads a report photo; family can view it, strangers cannot', async () => {
+  const cg = await login('0100000002'); const fam = await login('0100000012'); const other = await login('0100000022');
+  const r = (await j('/reports', { body: { client_id: 1, kind: 'visit', mood: 'ok' } }, cg)).data;
+  // 1x1 JPEG
+  const jpg = '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
+  const up = await j(`/reports/${r.id}/photos`, { body: { data: `data:image/jpeg;base64,${jpg}` } }, cg);
+  assert.equal(up.status, 200); assert.ok(up.data.url);
+  const list = (await j('/reports?client_id=1', {}, fam)).data.find(x => x.id === r.id);
+  assert.equal(list.photos.length, 1); assert.equal(list.photo_count, 1);
+  const ok = await fetch(B.replace(/\/api$/, '') + up.data.url, { headers: { authorization: `Bearer ${fam}` } });
+  assert.equal(ok.status, 200); assert.match(ok.headers.get('content-type'), /image/);
+  const no = await fetch(B.replace(/\/api$/, '') + up.data.url, { headers: { authorization: `Bearer ${other}` } });
+  assert.equal(no.status, 404);
+});

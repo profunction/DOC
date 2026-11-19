@@ -1,6 +1,6 @@
 // 照顾人端：我的任务、开始 / 完成、填探访报告、客人资料。
 import { useState } from 'react';
-import { listOutline, checkmarkDoneOutline, callOutline } from 'ionicons/icons';
+import { listOutline, checkmarkDoneOutline, callOutline, navigateOutline, medkitOutline, chatbubblesOutline, playOutline, documentTextOutline, pinOutline } from 'ionicons/icons';
 import { IonIcon } from '@ionic/react';
 import { useT } from '../i18n';
 import { useStore } from '../store';
@@ -48,13 +48,13 @@ function Tasks() {
     <div className="card">
       <div className="row between"><b>{fmtTime(x.scheduled_at)} · {x.title}</b><Badge kind={x.status}>{t('s_' + x.status)}</Badge></div>
       <div>{x.client_name} <span className="small muted">· {x.address}</span></div>
-      {x.notes && <div className="small muted">📌 {x.notes}</div>}
+      {x.notes && <div className="small muted"><IonIcon icon={pinOutline} /> {x.notes}</div>}
       <div className="row" style={{ marginTop: '.5rem' }}>
-        <Btn v="sm ghost" href={mapsLink(x.address)} target="_blank" rel="noreferrer">🗺 {t('navigate')}</Btn>
-        <Btn v="sm ghost" onClick={() => showInfo(x.client_id)}>🩺 {t('clientInfo')}</Btn>
-        <Btn v="sm ghost" onClick={() => setChatFor(x.client_id)}>💬 {t('group')}</Btn>
-        {x.status === 'assigned' && <Btn v="sm" onClick={() => start(x.id)}>▶ {t('start')}</Btn>}
-        <Btn v="sm ok" onClick={() => setReportFor(x)}>📝 {t('taskDone')}</Btn>
+        <Btn v="sm ghost" href={mapsLink(x.address)} target="_blank" rel="noreferrer"><IonIcon slot="start" icon={navigateOutline} />{t('navigate')}</Btn>
+        <Btn v="sm ghost" onClick={() => showInfo(x.client_id)}><IonIcon slot="start" icon={medkitOutline} />{t('clientInfo')}</Btn>
+        <Btn v="sm ghost" onClick={() => setChatFor(x.client_id)}><IonIcon slot="start" icon={chatbubblesOutline} />{t('group')}</Btn>
+        {x.status === 'assigned' && <Btn v="sm" onClick={() => start(x.id)}><IonIcon slot="start" icon={playOutline} />{t('start')}</Btn>}
+        <Btn v="sm ok" onClick={() => setReportFor(x)}><IonIcon slot="start" icon={documentTextOutline} />{t('taskDone')}</Btn>
       </div>
     </div>
   );

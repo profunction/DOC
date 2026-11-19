@@ -3,7 +3,9 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { statsChartOutline, alertCircleOutline, gitBranchOutline, peopleCircleOutline, documentTextOutline, peopleOutline, cardOutline, businessOutline, personAddOutline, mailOpenOutline } from 'ionicons/icons';
 import { useT } from '../i18n';
 import { useStore } from '../store';
-import { api, fmtTime } from '../api';
+import { api, fmtTime, compressImage } from '../api';
+import { IonIcon } from '@ionic/react';
+import { cameraOutline, calendarOutline, addOutline, watchOutline } from 'ionicons/icons';
 import { Shell, useLoad, Badge, Field, Empty, TASK_TYPES, ALERT_TYPES, PARTNER_TYPES, PLANS, telLink, waLink, mapsLink, localDT, useErr, Btn } from '../components/ui';
 import { AlertCard, ReportCard, Chat, Team } from './Family';
 
@@ -66,7 +68,7 @@ function Alerts() {
         <div className="row small">
           <select value={sim.client_id} onChange={e => setSim({ ...sim, client_id: Number(e.target.value) })}>{clients?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
           <select value={sim.type} onChange={e => setSim({ ...sim, type: e.target.value })}>{ALERT_TYPES.map(x => <option key={x} value={x}>{t('a_' + x)}</option>)}</select>
-          <Btn v="sm ghost" onClick={simulate}>⌚ {t('simulateWatch')}</Btn>
+          <Btn v="sm ghost" onClick={simulate}><IonIcon slot="start" icon={watchOutline} />{t('simulateWatch')}</Btn>
         </div>
       </div>
       {!data?.length && <Empty />}
@@ -130,7 +132,7 @@ function Dispatch() {
       {Err}
       <div className="card row between">
         <div className="row">{['requested', 'assigned', 'in_progress', 'done', 'all'].map(s => <Btn key={s} v={`sm ${filter === s ? '' : 'ghost'}`} onClick={() => setFilter(s)}>{s === 'all' ? t('all') : t('s_' + s)}</Btn>)}</div>
-        <Btn v="sm" onClick={() => setShow(s => !s)}>＋ {t('newTask')}</Btn>
+        <Btn v="sm" onClick={() => setShow(s => !s)}><IonIcon slot="start" icon={addOutline} />{t('newTask')}</Btn>
       </div>
       {show && <div className="card"><form onSubmit={create} className="form-grid">
         <Field label={t('client')}><select value={form.client_id} onChange={e => setForm({ ...form, client_id: Number(e.target.value) })}>{clients?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
@@ -169,7 +171,7 @@ function Clients() {
   if (sel) return <ClientDetail id={sel} back={() => { setSel(null); reload(); }} />;
   return (
     <div>
-      <div className="card row between"><span>{t('clients')} · {data?.length ?? 0}</span><Btn v="sm" onClick={() => setShowNew(s => !s)}>＋ {t('newClient')}</Btn></div>
+      <div className="card row between"><span>{t('clients')} · {data?.length ?? 0}</span><Btn v="sm" onClick={() => setShowNew(s => !s)}><IonIcon slot="start" icon={addOutline} />{t('newClient')}</Btn></div>
       {showNew && <ClientForm onSaved={() => { setShowNew(false); reload(); }} />}
       <div className="grid">{data?.map(c => (
         <div className="card" key={c.id} onClick={() => setSel(c.id)} style={{ cursor: 'pointer' }}>
@@ -250,13 +252,13 @@ function ClientDetail({ id, back }: { id: number; back: () => void }) {
               {[['conditions', h.conditions], ['meds', h.meds], ['allergies', h.allergies], ['doctor', h.doctor], ['mobility', h.mobility], ['langDiet', [h.language, h.diet].filter(Boolean).join(' / ')], ['healthNotes', h.notes], ['emergencyContact', c.emergency_contact], ['preferredHospital', c.preferred_hospital], ['notes', c.notes]].map(([k, v]) => <tr key={k as string}><th style={{ width: '32%' }}>{t(k as string)}</th><td>{v || '-'}</td></tr>)}
             </tbody></table>
           </div>
-          <div className="card"><h3>{t('familyMembers')}</h3>
+          <div className="card"><h3><IonIcon icon={peopleOutline} /> {t('familyMembers')}</h3>
             <div className="list">{c.family?.map((f: any) => <div key={f.id} className="row between"><span>{f.name} <span className="muted small">{f.relation}</span></span><span className="row small"><a href={telLink(f.phone)}>📞 {f.phone}</a><a href={waLink(f.phone)} target="_blank" rel="noreferrer">💬</a></span></div>)}</div>
             <form onSubmit={link} className="row" style={{ marginTop: '.6rem' }}><input placeholder={t('familyPhone')} value={famPhone} onChange={e => setFamPhone(e.target.value)} style={{ padding: '.5rem', border: '1px solid var(--line)', borderRadius: 8 }} required /><input placeholder={t('relation')} value={rel} onChange={e => setRel(e.target.value)} style={{ padding: '.5rem', border: '1px solid var(--line)', borderRadius: 8, width: 100 }} /><Btn v="sm">{t('linkFamily')}</Btn></form>
           </div>
           {s && <div className="grid">
-            <div className="card"><h3>📅 {t('today')} / {t('upcoming')}</h3><div className="list">{[...s.todayTasks, ...s.upcoming].map((x: any) => <div key={x.id} className="row between small"><span>{fmtTime(x.scheduled_at)} {x.title} · {x.assignee_name || ''}</span><Badge kind={x.status}>{t('s_' + x.status)}</Badge></div>)}{!s.todayTasks.length && !s.upcoming.length && <Empty />}</div></div>
-            <div className="card"><h3>📝 {t('lastReport')}</h3>{s.lastReport ? <ReportCard r={s.lastReport} /> : <Empty />}</div>
+            <div className="card"><h3><IonIcon icon={calendarOutline} /> {t('today')} / {t('upcoming')}</h3><div className="list">{[...s.todayTasks, ...s.upcoming].map((x: any) => <div key={x.id} className="row between small"><span>{fmtTime(x.scheduled_at)} {x.title} · {x.assignee_name || ''}</span><Badge kind={x.status}>{t('s_' + x.status)}</Badge></div>)}{!s.todayTasks.length && !s.upcoming.length && <Empty />}</div></div>
+            <div className="card"><h3><IonIcon icon={documentTextOutline} /> {t('lastReport')}</h3>{s.lastReport ? <ReportCard r={s.lastReport} /> : <Empty />}</div>
           </div>}
         </>
       ))}
@@ -267,12 +269,31 @@ function ClientDetail({ id, back }: { id: number; back: () => void }) {
 export function ReportForm({ cid, taskId, onSaved }: { cid: number; taskId?: number; onSaved: () => void }) {
   const { t } = useT();
   const [f, setF] = useState<any>({ kind: 'visit', mood: '', bp: '', glucose: '', temp: '', meds: '', diet_sleep: '', home_safety: '', requests: '', follow_up: '' });
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
   const { Err, show } = useErr();
   const S = (k: string) => ({ value: f[k], onChange: (e: any) => setF({ ...f, [k]: e.target.value }) });
-  async function save(e: FormEvent) { e.preventDefault(); try { await api('/reports', { body: { ...f, client_id: cid, task_id: taskId } }); onSaved(); } catch (err) { show(err); } }
+  async function pick(e: any) {
+    const files: File[] = Array.from(e.target.files || []);
+    try { const out = await Promise.all(files.slice(0, 6).map(x => compressImage(x))); setPhotos(p => [...p, ...out].slice(0, 6)); } catch (err) { show(err); }
+    e.target.value = '';
+  }
+  async function save(e: FormEvent) {
+    e.preventDefault(); setBusy(true);
+    try {
+      const r = await api('/reports', { body: { ...f, client_id: cid, task_id: taskId } });
+      for (const data of photos) await api(`/reports/${r.id}/photos`, { body: { data } });
+      onSaved();
+    } catch (err) { show(err); } finally { setBusy(false); }
+  }
   return (
-    <div className="card"><h3>{t('newReport')}</h3>{Err}
-      <form onSubmit={save}><div className="form-grid">
+    <div className="card"><h3><IonIcon icon={documentTextOutline} /> {t('newReport')}</h3>{Err}
+      <form onSubmit={save}>
+        <div className="photo-row">
+          {photos.map((p, i) => <span key={i} className="thumb"><img src={p} alt="" /><button type="button" onClick={() => setPhotos(ps => ps.filter((_, j) => j !== i))}>×</button></span>)}
+          <label className="thumb add"><IonIcon icon={cameraOutline} /><span>{t('photos')}</span><input type="file" accept="image/*" capture="environment" multiple onChange={pick} hidden /></label>
+        </div>
+        <div className="form-grid">
         <Field label={t('reportKind')}><select {...S('kind')}><option value="visit">{t('visit')}</option><option value="consult">{t('consult')}</option></select></Field>
         <Field label={t('mood')}><input {...S('mood')} /></Field><Field label={t('bp')}><input {...S('bp')} placeholder="130/80" /></Field>
         <Field label={t('glucose')}><input {...S('glucose')} /></Field><Field label={t('temp')}><input {...S('temp')} /></Field>
@@ -292,7 +313,7 @@ function Reports() {
   useEffect(() => { if (clients?.length && !cid) setCid(clients[0].id); }, [clients]);
   return (
     <div>
-      <div className="card row between"><span>{t('reports')}</span><div className="row"><select value={cid} onChange={e => setCid(Number(e.target.value))}>{clients?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select><Btn v="sm" onClick={() => setShow(s => !s)}>＋ {t('newReport')}</Btn></div></div>
+      <div className="card row between"><span>{t('reports')}</span><div className="row"><select value={cid} onChange={e => setCid(Number(e.target.value))}>{clients?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select><Btn v="sm" onClick={() => setShow(s => !s)}><IonIcon slot="start" icon={addOutline} />{t('newReport')}</Btn></div></div>
       {show && cid > 0 && <ReportForm cid={cid} onSaved={() => setShow(false)} />}
       {data?.map(r => <div className="card" key={r.id}><div className="small muted">{r.client_name}</div><ReportCard r={r} /></div>)}
     </div>
@@ -310,7 +331,7 @@ function Partners() {
   return (
     <div>
       {Err}
-      <div className="card row between"><span>{t('partners')}</span><Btn v="sm" onClick={() => setShow(s => !s)}>＋ {t('newPartner')}</Btn></div>
+      <div className="card row between"><span>{t('partners')}</span><Btn v="sm" onClick={() => setShow(s => !s)}><IonIcon slot="start" icon={addOutline} />{t('newPartner')}</Btn></div>
       {show && <div className="card"><form onSubmit={save}><div className="form-grid">
         <Field label={t('type')}><select {...S('type')}>{PARTNER_TYPES.map(x => <option key={x} value={x}>{t('p_' + x)}</option>)}</select></Field>
         <Field label={t('name')}><input {...S('name')} required /></Field><Field label="联络人 / Contact"><input {...S('contact_name')} /></Field>

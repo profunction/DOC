@@ -3,7 +3,9 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { homeOutline, chatbubblesOutline, documentTextOutline, calendarOutline, alertCircleOutline, medkitOutline, cardOutline, peopleOutline } from 'ionicons/icons';
 import { useT } from '../i18n';
 import { useStore } from '../store';
-import { api, fmtTime } from '../api';
+import { api, fmtTime, photoUrl } from '../api';
+import { IonIcon } from '@ionic/react';
+import { callOutline, logoWhatsapp, locationOutline, happyOutline, waterOutline, thermometerOutline, pulseOutline, imagesOutline } from 'ionicons/icons';
 import { Shell, useLoad, Badge, Field, Empty, TASK_TYPES, telLink, waLink, mapsLink, localDT, useErr, Btn } from '../components/ui';
 
 export default function Family() {
@@ -48,22 +50,22 @@ function Overview({ cid, hotline, go }: { cid: number; hotline: string; go: (t: 
         <div className="row between"><h3>{c.name}</h3><Badge>{t('plan_' + c.plan)}</Badge></div>
         <p className="small muted">{c.address}</p>
         <div className="row">
-          <Btn v="sm" href={telLink(hotline)}>📞 {t('hotline')}</Btn>
-          <Btn v="sm ok" href={waLink(hotline)} target="_blank" rel="noreferrer">💬 {t('whatsapp')}</Btn>
-          <Btn v="sm ghost" href={mapsLink(c.address, c.lat, c.lng)} target="_blank" rel="noreferrer">📍 {t('address')}</Btn>
+          <Btn v="sm" href={telLink(hotline)}><IonIcon slot="start" icon={callOutline} />{t('hotline')}</Btn>
+          <Btn v="sm ok" href={waLink(hotline)} target="_blank" rel="noreferrer"><IonIcon slot="start" icon={logoWhatsapp} />{t('whatsapp')}</Btn>
+          <Btn v="sm ghost" href={mapsLink(c.address, c.lat, c.lng)} target="_blank" rel="noreferrer"><IonIcon slot="start" icon={locationOutline} />{t('address')}</Btn>
         </div>
       </div>
       <div className="grid" style={{ marginTop: '.85rem' }}>
-        <div className="card"><h3>📅 {t('today')}</h3>
+        <div className="card"><h3><IonIcon icon={calendarOutline} /> {t('today')}</h3>
           {!s.todayTasks.length && <Empty text={t('noPlanToday')} />}
           <div className="list">{s.todayTasks.map((x: any) => <div key={x.id} className="row between"><span>{fmtTime(x.scheduled_at).slice(11)} {x.title}<div className="small muted">{x.assignee_name || x.partner_name || ''}</div></span><Badge kind={x.status}>{t('s_' + x.status)}</Badge></div>)}</div>
           {s.upcoming.length > 0 && <><h3 style={{ marginTop: '.8rem' }}>{t('upcoming')}</h3><div className="list">{s.upcoming.map((x: any) => <div key={x.id} className="small">{fmtTime(x.scheduled_at)} · {x.title}</div>)}</div></>}
         </div>
-        <div className="card"><h3>📝 {t('lastReport')}</h3>
+        <div className="card"><h3><IonIcon icon={documentTextOutline} /> {t('lastReport')}</h3>
           {s.lastReport ? <ReportCard r={s.lastReport} compact /> : <Empty />}
           <Btn v="sm ghost" onClick={() => go('reports')}>{t('reports')} →</Btn>
         </div>
-        <div className="card"><h3>🚨 {t('lastAlert')}</h3>
+        <div className="card"><h3><IonIcon icon={alertCircleOutline} /> {t('lastAlert')}</h3>
           {s.lastAlert ? <div><Badge kind={s.lastAlert.status}>{t('as_' + s.lastAlert.status)}</Badge> {t('a_' + s.lastAlert.type)} · {fmtTime(s.lastAlert.created_at)}<p className="small muted" style={{ marginTop: '.4rem' }}>{s.lastAlert.outcome}</p></div> : <Empty />}
         </div>
         <div className="card stat"><div className="n">RM {s.dueAmount}</div><div className="l">{t('dueAmount')}</div><Btn v="sm ghost" onClick={() => go('payments')}>{t('payments')} →</Btn></div>
@@ -77,9 +79,10 @@ export function ReportCard({ r, compact }: { r: any; compact?: boolean }) {
   return (
     <div>
       <div className="row between"><b>{r.kind === 'consult' ? t('consult') : t('visit')} · {fmtTime(r.created_at)}</b><span className="small muted">{r.reporter_name}</span></div>
-      <div className="row small" style={{ marginTop: '.3rem' }}>
-        <span>😊 {r.mood || '-'}</span><span>🩸 {t('bp')} {r.bp || '-'}</span><span>🍬 {r.glucose || '-'}</span><span>🌡 {r.temp || '-'}</span>
+      <div className="row small vitals" style={{ marginTop: '.3rem' }}>
+        <span><IonIcon icon={happyOutline} /> {r.mood || '-'}</span><span><IonIcon icon={pulseOutline} /> {t('bp')} {r.bp || '-'}</span><span><IonIcon icon={waterOutline} /> {t('glucose')} {r.glucose || '-'}</span><span><IonIcon icon={thermometerOutline} /> {r.temp || '-'}</span>
       </div>
+      {r.photos?.length > 0 && <div className="photo-row view">{r.photos.map((u: string) => <a key={u} className="thumb" href={photoUrl(u)} target="_blank" rel="noreferrer"><img src={photoUrl(u)} alt="" /></a>)}</div>}
       {!compact && <div className="small stack" style={{ marginTop: '.4rem' }}>
         <div><b>{t('medsTaken')}：</b>{r.meds || '-'}</div><div><b>{t('dietSleep')}：</b>{r.diet_sleep || '-'}</div><div><b>{t('homeSafety')}：</b>{r.home_safety || '-'}</div><div><b>{t('requests')}：</b>{r.requests || '-'}</div>
       </div>}
@@ -124,7 +127,7 @@ function Alerts({ cid }: { cid: number }) {
   return (
     <div>
       {Err}
-      <div className="card row between"><span>{t('alerts')}</span><Btn v="danger sm" disabled={busy} onClick={raise}>🆘 {t('sos')}</Btn></div>
+      <div className="card row between"><span>{t('alerts')}</span><Btn v="danger sm" disabled={busy} onClick={raise}><IonIcon slot="start" icon={alertCircleOutline} />{t('sos')}</Btn></div>
       {!data?.length && <Empty />}
       {data?.map(a => <AlertCard key={a.id} a={a} />)}
     </div>
@@ -194,7 +197,7 @@ function Profile({ cid }: { cid: number }) {
       <div className="card"><h3>{c.name} · {c.gender} · {c.birth_year}</h3><p className="small muted">{c.address}</p>
         <table className="tbl"><tbody>{rows.map(([k, v]) => <tr key={k}><th style={{ width: '38%' }}>{k}</th><td>{v || '-'}</td></tr>)}</tbody></table>
       </div>
-      <div className="card"><h3>{t('familyMembers')}</h3><div className="list">{c.family?.map((f: any) => <div key={f.id} className="row between"><span>{f.name} <span className="muted small">{f.relation}</span></span><a className="small" href={telLink(f.phone)}>{f.phone}</a></div>)}</div></div>
+      <div className="card"><h3><IonIcon icon={peopleOutline} /> {t('familyMembers')}</h3><div className="list">{c.family?.map((f: any) => <div key={f.id} className="row between"><span>{f.name} <span className="muted small">{f.relation}</span></span><a className="small" href={telLink(f.phone)}>{f.phone}</a></div>)}</div></div>
     </div>
   );
 }
@@ -223,9 +226,9 @@ export function Team({ showPrice }: { showPrice?: boolean }) {
         <div className="list">{list.map(p => <div key={p.id}>
           <div className="row between"><b>{p.name}</b><Badge kind={p.status}>{t(p.status)}</Badge></div>
           <div className="small muted">{p.contact_name} · {p.region} · {t('dutyHours')}: {p.duty_hours}</div>
-          {p.license_no && p.license_no !== '-' && <div className="small">🪪 {t('license')}: <b>{p.license_no}</b> · {p.license_body}</div>}
+          {p.license_no && p.license_no !== '-' && <div className="small"><IonIcon icon={imagesOutline} style={{ display: 'none' }} />🪪 {t('license')}: <b>{p.license_no}</b> · {p.license_body}</div>}
           {showPrice && p.price_note && <div className="small" style={{ color: 'var(--brand)' }}>💰 {p.price_note}</div>}
-          {p.phone && <div className="row small" style={{ marginTop: '.2rem' }}><a href={telLink(p.phone)}>📞 {p.phone}</a></div>}
+          {p.phone && <div className="row small" style={{ marginTop: '.2rem' }}><a href={telLink(p.phone)}><IonIcon icon={callOutline} /> {p.phone}</a></div>}
         </div>)}</div>
       </div>))}</div>
   );

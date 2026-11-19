@@ -11,3 +11,8 @@ web/android/local.properties
 web/android/app/src/main/assets/public/
 .DS_Store
 server/data/
+
+# Android 签名文件，绝不入库
+web/android/*.keystore
+web/android/*.jks
+web/android/keystore.properties

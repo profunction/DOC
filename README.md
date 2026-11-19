@@ -18,7 +18,7 @@ DOC/
 |---|---|
 | 1. 紧急按钮：老人按下，协调员和子女同时收到通知和定位 | 长者端超大 🆘 按钮（按住 2 秒防误触）→ 取 GPS → 协调员与子女页面实时弹出警报、推送本地通知、家庭群组自动发系统消息 |
 | 2. 健康档案：病史、用药、医生、过敏，照顾人随时能看 | 协调员录入，子女 / 照顾人可看；AES-256-GCM 加密落盘；每次查看写入访问记录（PDPA） |
-| 3. 探访与看诊报告：照顾人填写，子女即时收到 | 照顾人端"完成并填报告"表单（精神、血压、血糖、体温、吃药、饮食睡眠、家中安全、需求、跟进）→ 子女端实时刷新 + 群组系统消息 |
+| 3. 探访与看诊报告：照顾人填写，子女即时收到 | 照顾人端"完成并填报告"表单（精神、血压、血糖、体温、吃药、饮食睡眠、家中安全、需求、跟进）+ 拍照上传（客户端压缩、服务器端按权限提供）→ 子女端实时刷新并显示缩略图 + 群组系统消息 |
 | 4. 家庭群组：子女、协调员、照顾人在同一个对话里 | 每位长者一个群组，实时聊天，所有事件自动留痕 |
 | 5. 服务预约：子女可以预约陪诊、探访、买药 | 子女端预约 → 协调员派单给照顾人 / 合作伙伴 → 照顾人端执行 |
 
@@ -83,8 +83,15 @@ cd web && npm run build && cd ../server && npm start   # 打开 http://localhost
 ## 打 Android APK
 
 ```bash
-cd web && npm run android:apk
+cd web && npm run android:apk        # 调试版 app-debug.apk
 ```
+
+```bash
+cd web && npm run android:release    # 正式签名版，复制到 downloads/anxin-care.apk
+```
+
+正式版需要签名文件：把 `release.keystore` 和 `keystore.properties`（四行：storeFile、storePassword、keyAlias、keyPassword）放在 `web/android/`，两者都已被 .gitignore 排除。
+**签名文件要妥善保管并备份**，以后每次更新 App 都必须用同一把钥匙，否则用户要卸载重装。
 
 需要 JDK 21 与 Android SDK（platform 35、build-tools 35.0.0），在 `web/android/local.properties` 写 `sdk.dir=/你的/android-sdk`。
 产物在 `web/android/app/build/outputs/apk/debug/app-debug.apk`。
@@ -124,4 +131,4 @@ cd server && npm test     # 后端：权限隔离、加密、SOS 流程、派单
 - App 内推送目前是前台实时连接 + 本地通知；App 关闭时的推送已通过 ntfy 解决（协调员装 ntfy App）。若要在本 App 内收到，需再接 Firebase Cloud Messaging。
 - 手表接入已通过 Traccar 完成（`POST /api/integrations/traccar`）；跌倒感应能否被解析取决于手表型号，拿到样品后用 Traccar 实测。
 - iOS 版：`npx cap add ios`，需要 Mac 与 Apple 开发者账号。
-- 在线付款（FPX / 信用卡）、照片上传到探访报告。
+- 在线付款（FPX / 信用卡）。

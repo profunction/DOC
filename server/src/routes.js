@@ -4,6 +4,7 @@ import { db, encrypt, decrypt, audit, nowIso } from './db.js';
 import { sign, requireAuth, requireRole, clientIdsFor, canSeeClient } from './auth.js';
 import { subscribe, broadcastClient } from './events.js';
 import { pushNtfy, traccarHandler, integrationStatus } from './integrations.js';
+import { uploads } from './uploads.js';
 
 export const api = Router();
 const pub = Router();
@@ -66,6 +67,7 @@ api.post('/integrations/traccar', traccarHandler);
 
 // ---------- 需要登录 ----------
 api.use(requireAuth);
+api.use(uploads);
 
 api.get('/me', (req, res) => {
   const clients = clientIdsFor(req.user);
@@ -133,6 +135,7 @@ api.get('/clients/:id/summary', (req, res) => {
       LEFT JOIN users u ON u.id = t.assignee_user_id LEFT JOIN partners p ON p.id = t.partner_id
       WHERE t.client_id = ? AND substr(t.scheduled_at,1,10) > ? AND t.status != 'cancelled' ORDER BY t.scheduled_at LIMIT 5`).all(id, today);
   const lastReport = db.prepare(`SELECT r.*, u.name AS reporter_name FROM reports r LEFT JOIN users u ON u.id = r.reporter_id WHERE r.client_id = ? ORDER BY r.created_at DESC LIMIT 1`).get(id);
+  if (lastReport) lastReport.photos = db.prepare('SELECT file FROM report_photos WHERE report_id = ?').all(lastReport.id).map(p => `/api/photos/${p.file}`);
   const openAlerts = db.prepare(`SELECT * FROM alerts WHERE client_id = ? AND status != 'resolved' ORDER BY created_at DESC`).all(id);
   const lastAlert = db.prepare(`SELECT * FROM alerts WHERE client_id = ? ORDER BY created_at DESC LIMIT 1`).get(id);
   const dueAmount = db.prepare(`SELECT COALESCE(SUM(amount),0) AS s FROM payments WHERE client_id = ? AND status = 'due'`).get(id).s;
@@ -247,7 +250,8 @@ api.get('/reports', (req, res) => {
   if (req.query.client_id) { where.push('r.client_id = ?'); params.push(Number(req.query.client_id)); }
   const rows = db.prepare(`SELECT r.*, c.name AS client_name, u.name AS reporter_name FROM reports r JOIN clients c ON c.id = r.client_id
       LEFT JOIN users u ON u.id = r.reporter_id WHERE ${where.join(' AND ')} ORDER BY r.created_at DESC LIMIT 200`).all(...params);
-  res.json(rows);
+  const photos = db.prepare('SELECT report_id, file FROM report_photos WHERE report_id IN (' + (rows.map(() => '?').join(',') || 'NULL') + ')').all(...rows.map(r => r.id));
+  res.json(rows.map(r => ({ ...r, photos: photos.filter(p => p.report_id === r.id).map(p => `/api/photos/${p.file}`) })));
 });
 api.post('/reports', requireRole('caregiver', 'coordinator'), (req, res) => {
   const b = req.body || {};
