@@ -1,11 +1,11 @@
 // 宣传网站首页（三语）。图标：lucide（ISC）；插画：unDraw（见 public/illustrations/LICENSE.txt）。
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Siren, Home, Car, Pill, Watch, HeartHandshake, MessageCircle, Smartphone, Phone, ShieldCheck, ChevronRight, Check, Globe } from 'lucide-react';
 import { useT, LANGS } from '../i18n';
 import { api } from '../api';
 
-const HOTLINE = (import.meta.env.VITE_HOTLINE as string | undefined) || '60123456789';
+const DEFAULT_HOTLINE = (import.meta.env.VITE_HOTLINE as string | undefined) || '60123456789';
 const APK_URL = (import.meta.env.VITE_APK_URL as string | undefined) || '/downloads/anxin-care.apk';
 
 export default function Landing() {
@@ -13,6 +13,9 @@ export default function Landing() {
   const [f, setF] = useState({ name: '', phone: '', city: '', message: '' });
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState('');
+  // 热线号码以服务器的 HOTLINE_PHONE 为准，改 Render 环境变量即可，不用重新打包
+  const [HOTLINE, setHotline] = useState(DEFAULT_HOTLINE);
+  useEffect(() => { api<{ hotline: string }>('/public/info', { auth: false }).then(r => r.hotline && setHotline(r.hotline)).catch(() => {}); }, []);
   async function submit(e: FormEvent) {
     e.preventDefault(); setErr('');
     try { await api('/public/enquiry', { body: { ...f, lang }, auth: false }); setSent(true); } catch { setErr(t('networkError')); }
