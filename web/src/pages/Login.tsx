@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { IonContent, IonPage } from '@ionic/react';
 import { useT } from '../i18n';
 import { useStore } from '../store';
-import { getApiBase, setApiBase, isNative, pingServer, ApiError } from '../api';
+import { getApiBase, setApiBase, isNative, pingServer, ApiError, api } from '../api';
 import { LangSelect, useErr, Btn } from '../components/ui';
 
 const DEMO = [
@@ -26,6 +26,9 @@ export default function Login() {
   function tapLogo() { const n = taps + 1; setTaps(n); if (n >= 7) { setShowServer(true); setTaps(0); } }
   const [busy, setBusy] = useState(false);
   const [ping, setPing] = useState('');
+  // 只有服务器处于演示模式（SEED_DEMO 不是 0）才显示演示账号
+  const [demo, setDemo] = useState(false);
+  useEffect(() => { if (getApiBase() || !isNative) api<{ demo?: boolean }>('/public/info', { auth: false }).then(r => setDemo(Boolean(r.demo))).catch(() => {}); }, []);
   const { Err, show, setErr } = useErr();
 
   async function testServer() {
@@ -63,12 +66,12 @@ export default function Login() {
         </form>
         {!isNative && <p className="small muted" style={{ marginTop: '.8rem' }}><Link to="/">← {t('tagline')}</Link></p>}
         {showServer && <p className="small muted">{BUILT_IN ? `${t('serverUrl')}: ${import.meta.env.VITE_API_BASE}` : ''}</p>}
-        <details style={{ marginTop: '.6rem' }}>
+        {demo && <details style={{ marginTop: '.6rem' }}>
           <summary className="small muted">{t('demoAccounts')}</summary>
           <div className="stack" style={{ marginTop: '.5rem' }}>
             {DEMO.map(d => <Btn key={d.phone} type="button" v="ghost sm block" onClick={() => { setPhone(d.phone); setPassword('123456'); }}>{t(d.role)} · {d.phone}</Btn>)}
           </div>
-        </details>
+        </details>}
       </div>
     </div></IonContent></IonPage>
   );

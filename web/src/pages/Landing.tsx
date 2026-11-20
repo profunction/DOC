@@ -15,7 +15,8 @@ export default function Landing() {
   const [err, setErr] = useState('');
   // 热线号码以服务器的 HOTLINE_PHONE 为准，改 Render 环境变量即可，不用重新打包
   const [HOTLINE, setHotline] = useState(DEFAULT_HOTLINE);
-  useEffect(() => { api<{ hotline: string }>('/public/info', { auth: false }).then(r => r.hotline && setHotline(r.hotline)).catch(() => {}); }, []);
+  const [demo, setDemo] = useState(false);
+  useEffect(() => { api<{ hotline: string; demo?: boolean }>('/public/info', { auth: false }).then(r => { if (r.hotline) setHotline(r.hotline); setDemo(Boolean(r.demo)); }).catch(() => {}); }, []);
   async function submit(e: FormEvent) {
     e.preventDefault(); setErr('');
     try { await api('/public/enquiry', { body: { ...f, lang }, auth: false }); setSent(true); } catch { setErr(t('networkError')); }
@@ -42,7 +43,7 @@ export default function Landing() {
           <span className="eyebrow"><ShieldCheck size={16} /> {t('tagline')}</span>
           <h1>{t('heroTitle')}</h1>
           <p>{t('heroSub')}</p>
-          <div className="cta"><a className="btn lg" href={wa} target="_blank" rel="noreferrer"><MessageCircle size={18} /> {t('ctaWhatsapp')}</a><Link className="btn lg secondary" to="/app/login">{t('ctaTry')} <ChevronRight size={18} /></Link></div>
+          <div className="cta"><a className="btn lg" href={wa} target="_blank" rel="noreferrer"><MessageCircle size={18} /> {t('ctaWhatsapp')}</a><Link className="btn lg secondary" to="/app/login">{demo ? t('ctaTry') : t('nav_login')} <ChevronRight size={18} /></Link></div>
           <div className="notice">{t('notMedical')}</div>
         </div>
         <div className="hero-art">
@@ -103,10 +104,10 @@ export default function Landing() {
             <h2 className="sec">{t('appTitle')}</h2>
             <p className="muted" style={{ maxWidth: 620 }}>{t('appD')}</p>
             <div className="row"><a className="btn lg" href={APK_URL}><Smartphone size={18} /> {t('downloadApk')}</a><Link className="btn lg secondary" to="/app/login">{t('openWeb')}</Link></div>
-            <div className="demo-grid" style={{ marginTop: '1.2rem' }}>
+            {demo && <><div className="demo-grid" style={{ marginTop: '1.2rem' }}>
               {[['roleElder', '0100000011'], ['roleFamily', '0100000012'], ['roleCoordinator', '0100000001'], ['roleCaregiver', '0100000002']].map(([r, p]) => <div className="card small" key={p}><b>{t(r)}</b><br /><code>{p}</code> / <code>123456</code></div>)}
             </div>
-            <p className="small muted" style={{ marginTop: '.6rem' }}>{t('demoAccounts')}</p>
+            <p className="small muted" style={{ marginTop: '.6rem' }}>{t('demoAccounts')}</p></>}
           </div>
           <img src="/illustrations/messages.svg" alt="" className="app-illu" />
         </div>

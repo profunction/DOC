@@ -41,6 +41,7 @@ function guardClient(req, res) {
 pub.get('/info', (req, res) => {
   res.json({
     hotline: HOTLINE,
+    demo: process.env.SEED_DEMO !== '0',
     whatsapp: `https://wa.me/${HOTLINE}`,
     plans: [
       { id: 'basic', fee: [150, 200] },
