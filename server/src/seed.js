@@ -15,6 +15,15 @@ export const DEMO_ACCOUNTS = [
   { phone: '0100000032', password: '123456', role: 'family', name: 'Siti（anak perempuan）', client: 3, relation: '女儿' },
 ];
 
+/** 用环境变量建立第一个协调员账号（部署时在 Render / .env 设 ADMIN_PHONE 与 ADMIN_PASSWORD），已存在则略过 */
+export function ensureAdmin() {
+  const phone = String(process.env.ADMIN_PHONE || '').trim(); const pw = String(process.env.ADMIN_PASSWORD || '');
+  if (!phone || !pw) return;
+  if (db.prepare('SELECT id FROM users WHERE phone = ?').get(phone)) return;
+  db.prepare('INSERT INTO users (phone, password_hash, name, role, lang) VALUES (?,?,?,?,?)').run(phone, bcrypt.hashSync(pw, 10), process.env.ADMIN_NAME || '总协调员', 'coordinator', 'zh');
+  console.log(`已建立协调员账号 ${phone}`);
+}
+
 export function seedIfEmpty() {
   if (db.prepare('SELECT COUNT(*) AS n FROM users').get().n > 0) return;
   console.log('写入演示数据…');

@@ -4,7 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { api } from './routes.js';
-import { seedIfEmpty } from './seed.js';
+import { seedIfEmpty, ensureAdmin } from './seed.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8787);
@@ -12,6 +12,7 @@ const WEB_DIR = process.env.WEB_DIR || path.join(__dirname, '..', '..', 'web', '
 const DOWNLOADS_DIR = process.env.DOWNLOADS_DIR || path.join(__dirname, '..', '..', 'downloads');
 
 if (process.env.SEED_DEMO !== '0') seedIfEmpty();
+ensureAdmin();
 
 const app = express();
 app.disable('x-powered-by');
