@@ -3,10 +3,12 @@ import bcrypt from 'bcryptjs';
 import { db, encrypt, decrypt, audit, nowIso } from './db.js';
 import { sign, requireAuth, requireRole, clientIdsFor, canSeeClient } from './auth.js';
 import { subscribe, broadcastClient, broadcastUser } from './events.js';
-import { pushNtfy, traccarHandler, integrationStatus } from './integrations.js';
+import { pushNtfy, integrationStatus } from './integrations.js';
 import { uploads } from './uploads.js';
 import { createInvite, findInvite, useInvite, unusablePasswordHash, maskPhone, rateLimit, failures } from './accounts.js';
 import { getSetting, setSetting, getHotline, SETTING_KEYS, backupNow, listBackups, BACKUP_DIR } from './settings.js';
+import { handlePosition, handleEvent, watchSummary, watchTrail, checkOffline } from './watch.js';
+import { saveToken, removeToken, fcmConfigured, pushFcmToClientAudience } from './fcm.js';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
@@ -129,7 +131,9 @@ api.post('/auth/login', (req, res) => {
   res.json({ token: sign(u), user: safeUser(u) });
 });
 api.use('/public', pub);
-api.post('/integrations/traccar', traccarHandler);
+const traccarKey = (req, res, next) => { const k = process.env.TRACCAR_KEY || ''; if (!k || req.query.key !== k) return res.status(401).json({ error: 'bad_key' }); next(); };
+api.post('/integrations/traccar', traccarKey, (req, res) => res.json(handleEvent(req.body || {})));            // event.forward.url
+api.post('/integrations/traccar/position', traccarKey, (req, res) => res.json(handlePosition(req.body || {}))); // forward.url (type=json)
 
 // ---------- 需要登录 ----------
 api.use(requireAuth);
@@ -243,6 +247,7 @@ api.post('/alerts', (req, res) => {
   broadcastClient(clientId, 'alert', { ...alert, client_name: client?.name });
   systemMessage(clientId, `🚨 ${client?.name} 发出${labelType(type)}（来源：${source}）。协调中心已收到，会在三分钟内回电。`);
   pushNtfy({ title: `🚨 ${client?.name} ${labelType(type)}`, message: `来源：${source}${b.lat ? `\n位置：https://www.google.com/maps?q=${b.lat},${b.lng}` : ''}` });
+  pushFcmToClientAudience(clientId, { title: `🚨 ${client?.name} ${labelType(type)}`, body: '协调中心请马上处理', data: { type: 'alert', alert_id: String(alert.id), client_id: String(clientId) } }, req.user.id);
   res.json(alert);
 });
 function labelType(t) {
@@ -350,6 +355,7 @@ api.post('/reports', requireRole('caregiver', 'coordinator'), (req, res) => {
   const report = db.prepare('SELECT * FROM reports WHERE id = ?').get(r.lastInsertRowid);
   broadcastClient(clientId, 'report', report);
   systemMessage(clientId, `📝 ${req.user.name} 提交了${b.kind === 'consult' ? '看诊' : '探访'}报告：精神${b.mood || '-'}，血压 ${b.bp || '-'}，吃药 ${b.meds || '-'}。${b.follow_up ? '需跟进：' + b.follow_up : ''}`);
+  pushFcmToClientAudience(clientId, { title: `📝 新探访报告`, body: `${req.user.name}：精神${b.mood || '-'}，血压 ${b.bp || '-'}`, data: { type: 'report', client_id: String(clientId) } }, req.user.id);
   res.json(report);
 });
 
@@ -509,6 +515,40 @@ api.get('/enquiries', requireRole('coordinator'), (req, res) => res.json(db.prep
   (SELECT c.name FROM family_links f JOIN clients c ON c.id = f.client_id WHERE f.user_id = e.user_id ORDER BY c.id LIMIT 1) AS client_name FROM enquiries e ORDER BY e.id DESC LIMIT 200`).all()));
 api.get('/audit', requireRole('coordinator'), (req, res) => res.json(db.prepare(`SELECT a.*, u.name AS user_name FROM audit_log a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.id DESC LIMIT 200`).all()));
 
+// ---------- 手表 ----------
+api.get('/clients/:id/watch', (req, res) => { const id = guardClient(req, res); if (!id) return; res.json(watchSummary(id)); });
+api.get('/clients/:id/watch/trail', (req, res) => { const id = guardClient(req, res); if (!id) return; res.json(watchTrail(id, Number(req.query.hours) || 24)); });
+api.patch('/clients/:id/watch', requireRole('coordinator', 'family'), (req, res) => {
+  const id = guardClient(req, res); if (!id) return;
+  const b = req.body || {};
+  if (req.user.role === 'coordinator' && b.watch_id !== undefined) db.prepare('UPDATE clients SET watch_id = ? WHERE id = ?').run(String(b.watch_id).trim() || null, id);
+  if (b.safe_lat !== undefined && b.safe_lng !== undefined) db.prepare('UPDATE clients SET safe_lat = ?, safe_lng = ?, watch_status = NULL WHERE id = ?').run(b.safe_lat === null ? null : Number(b.safe_lat), b.safe_lng === null ? null : Number(b.safe_lng), id);
+  if (b.safe_radius !== undefined) db.prepare('UPDATE clients SET safe_radius = ? WHERE id = ?').run(Math.max(0, Math.min(5000, Number(b.safe_radius) || 0)), id);
+  if (b.hr_min !== undefined) db.prepare('UPDATE clients SET hr_min = ? WHERE id = ?').run(Number(b.hr_min) || 45, id);
+  if (b.hr_max !== undefined) db.prepare('UPDATE clients SET hr_max = ? WHERE id = ?').run(Number(b.hr_max) || 120, id);
+  audit(req.user.id, 'watch_settings', `client:${id}`);
+  res.json(watchSummary(id));
+});
+/** 协调员模拟手表数据（测试用） */
+api.post('/clients/:id/watch/simulate', requireRole('coordinator'), (req, res) => {
+  const id = Number(req.params.id); const c = db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
+  if (!c) return res.status(404).json({ error: 'not_found' });
+  if (!c.watch_id) { db.prepare('UPDATE clients SET watch_id = ? WHERE id = ?').run(`SIM-${id}`, id); c.watch_id = `SIM-${id}`; }
+  const b = req.body || {};
+  const out = handlePosition({ device: { uniqueId: c.watch_id }, position: { latitude: b.lat ?? c.lat ?? 1.4855, longitude: b.lng ?? c.lng ?? 103.767, fixTime: new Date().toISOString(),
+    attributes: { batteryLevel: b.battery ?? 80, heartRate: b.heart_rate ?? 72, alarm: b.alarm || undefined } } });
+  res.json(out);
+});
+api.post('/watch/check-offline', requireRole('coordinator'), (req, res) => res.json({ checked: checkOffline() }));
+api.get('/watch/overview', requireRole('coordinator'), (req, res) => {
+  const rows = db.prepare(`SELECT id FROM clients WHERE active = 1 AND watch_id IS NOT NULL AND watch_id != ''`).all();
+  res.json(rows.map(r => watchSummary(r.id)));
+});
+
+// ---------- 推送 token ----------
+api.post('/push/token', (req, res) => { saveToken(req.user.id, String(req.body?.token || ''), req.body?.platform); res.json({ ok: true, fcm: fcmConfigured() }); });
+api.delete('/push/token', (req, res) => { removeToken(String(req.body?.token || '')); res.json({ ok: true }); });
+
 // ---------- 系统设置与备份（协调员） ----------
 api.get('/settings', requireRole('coordinator'), (req, res) => {
   const out = Object.fromEntries(SETTING_KEYS.map(k => [k, getSetting(k)]));
@@ -540,7 +580,7 @@ api.get('/backups/:file', requireRole('coordinator'), (req, res) => {
 api.get('/dashboard', requireRole('coordinator'), (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   res.json({
-    integrations: integrationStatus(),
+    integrations: { ...integrationStatus(), fcm: fcmConfigured() },
     clients: db.prepare('SELECT COUNT(*) AS n FROM clients WHERE active = 1').get().n,
     openAlerts: db.prepare(`SELECT COUNT(*) AS n FROM alerts WHERE status != 'resolved'`).get().n,
     todayTasks: db.prepare(`SELECT COUNT(*) AS n FROM tasks WHERE substr(scheduled_at,1,10) = ? AND status != 'cancelled'`).get(today).n,

@@ -1,9 +1,10 @@
 // 子女端：档案、报告、警报、预约、群组、付费、团队。
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { homeOutline, chatbubblesOutline, documentTextOutline, calendarOutline, alertCircleOutline, medkitOutline, cardOutline, peopleOutline } from 'ionicons/icons';
+import { homeOutline, chatbubblesOutline, documentTextOutline, calendarOutline, alertCircleOutline, medkitOutline, cardOutline, peopleOutline, watchOutline } from 'ionicons/icons';
 import { IonPage, IonContent, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton } from '@ionic/react';
 import { checkmarkCircle, ellipseOutline, timeOutline, refreshOutline, logOutOutline } from 'ionicons/icons';
 import { ElderPhoneSetup } from '../components/ElderPhoneSetup';
+import { WatchPanel } from '../components/WatchPanel';
 import { useT } from '../i18n';
 import { useStore } from '../store';
 import { api, fmtTime, photoUrl, niceTime } from '../api';
@@ -20,7 +21,7 @@ export default function Family() {
   const { data: clients } = useLoad<any[]>('/clients');
   const tabs = [
     { id: 'overview', label: t('overview'), icon: homeOutline }, { id: 'group', label: t('group'), icon: chatbubblesOutline }, { id: 'reports', label: t('reports'), icon: documentTextOutline },
-    { id: 'bookings', label: t('bookings'), icon: calendarOutline }, { id: 'alerts', label: t('alerts'), icon: alertCircleOutline }, { id: 'profile', label: t('profile'), icon: medkitOutline },
+    { id: 'bookings', label: t('bookings'), icon: calendarOutline }, { id: 'location', label: t('location'), icon: watchOutline }, { id: 'alerts', label: t('alerts'), icon: alertCircleOutline }, { id: 'profile', label: t('profile'), icon: medkitOutline },
     { id: 'payments', label: t('payments'), icon: cardOutline }, { id: 'team', label: t('team'), icon: peopleOutline },
   ];
   const right = clients && clients.length > 1 ? (
@@ -33,6 +34,7 @@ export default function Family() {
       {tab === 'group' && <Chat cid={cid} />}
       {tab === 'reports' && <Reports cid={cid} />}
       {tab === 'bookings' && <Bookings cid={cid} />}
+      {tab === 'location' && <WatchPanel clientId={cid} />}
       {tab === 'alerts' && <Alerts cid={cid} />}
       {tab === 'profile' && <Profile cid={cid} />}
       {tab === 'payments' && <Payments cid={cid} />}

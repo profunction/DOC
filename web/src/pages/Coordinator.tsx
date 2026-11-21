@@ -7,6 +7,7 @@ import { api, fmtTime, compressImage, getApiBase, niceTime } from '../api';
 import { IonIcon } from '@ionic/react';
 import { cameraOutline, calendarOutline, addOutline, watchOutline, logoWhatsapp, copyOutline, refreshOutline, settingsOutline, notificationsOutline, cloudDownloadOutline, callOutline, personAddOutline as personAddIcon, chevronForward } from 'ionicons/icons';
 import { ElderPhoneSetup } from '../components/ElderPhoneSetup';
+import { WatchPanel } from '../components/WatchPanel';
 import { Shell, useLoad, Badge, Field, Empty, TASK_TYPES, ALERT_TYPES, PARTNER_TYPES, PLANS, telLink, waLink, mapsLink, localDT, useErr, Btn } from '../components/ui';
 import { AlertCard, ReportCard, Chat, Team } from './Family';
 
@@ -16,7 +17,7 @@ export default function Coordinator() {
   const tabs = [
     { id: 'dashboard', label: t('dashboard'), icon: statsChartOutline }, { id: 'alerts', label: t('alerts'), icon: alertCircleOutline }, { id: 'dispatch', label: t('dispatch'), icon: gitBranchOutline },
     { id: 'clients', label: t('clients'), icon: peopleCircleOutline }, { id: 'reports', label: t('reports'), icon: documentTextOutline }, { id: 'partners', label: t('partners'), icon: peopleOutline },
-    { id: 'money', label: t('payments'), icon: cardOutline }, { id: 'aid', label: t('aid'), icon: businessOutline }, { id: 'users', label: t('users'), icon: personAddOutline }, { id: 'enquiries', label: t('enquiries'), icon: mailOpenOutline }, { id: 'settings', label: t('settings'), icon: settingsOutline },
+    { id: 'money', label: t('payments'), icon: cardOutline }, { id: 'aid', label: t('aid'), icon: businessOutline }, { id: 'users', label: t('users'), icon: personAddOutline }, { id: 'enquiries', label: t('enquiries'), icon: mailOpenOutline }, { id: 'watch', label: t('watchTab'), icon: watchOutline }, { id: 'settings', label: t('settings'), icon: settingsOutline },
   ];
   return (
     <Shell title={`${t('appName')} · ${t('roleCoordinator')}`} tabs={tabs} tab={tab} onTab={setTab}>
@@ -31,6 +32,7 @@ export default function Coordinator() {
       {tab === 'users' && <Users />}
       {tab === 'enquiries' && <Enquiries />}
       {tab === 'settings' && <SettingsPage />}
+      {tab === 'watch' && <WatchOverview />}
     </Shell>
   );
 }
@@ -71,9 +73,30 @@ function Dashboard({ go }: { go: (t: string) => void }) {
   );
 }
 
+function WatchOverview() {
+  const { t } = useT();
+  const { data, reload } = useLoad<any[]>('/watch/overview', [], ['watch', 'alert']);
+  const { data: clients } = useLoad<any[]>('/clients');
+  const [sel, setSel] = useState<number | null>(null);
+  if (sel) return <div><Btn v="ghost sm" onClick={() => { setSel(null); reload(); }}>← {t('back')}</Btn><h3 style={{ margin: '.6rem 0' }}>{clients?.find(c => c.id === sel)?.name}</h3><WatchPanel clientId={sel} canSimulate /></div>;
+  return (
+    <div>
+      <div className="card row between"><span>{t('watchTab')} · {data?.length ?? 0}</span><div className="row"><select onChange={e => e.target.value && setSel(Number(e.target.value))} defaultValue=""><option value="">{t('client')} —</option>{clients?.map(c => <option key={c.id} value={c.id}>{c.name}{c.watch_id ? ' ⌚' : ''}</option>)}</select>
+        <Btn v="ghost sm" onClick={async () => { await api('/watch/check-offline', { body: {} }); reload(); }}>{t('checkOfflineNow')}</Btn></div></div>
+      <div className="card tbl-wrap"><table className="tbl"><thead><tr><th>{t('client')}</th><th>{t('watchId')}</th><th>{t('lastSeen')}</th><th>{t('battery')}</th><th>{t('status')}</th></tr></thead>
+        <tbody>{data?.map(w => <tr key={w.id} style={{ cursor: 'pointer' }} onClick={() => setSel(w.id)}>
+          <td><b>{w.name}</b></td><td className="small">{w.watch_id}</td><td className="small">{w.watch_last_seen ? niceTime(w.watch_last_seen) : '-'}{w.offline && w.watch_last_seen && <Badge kind="danger">offline</Badge>}</td>
+          <td>{w.watch_battery != null ? <Badge kind={w.watch_battery <= w.low_battery ? 'danger' : 'ok'}>{w.watch_battery}%</Badge> : '-'}</td>
+          <td>{w.watch_status === 'inside' ? <Badge kind="ok">{t('inSafeZone')}</Badge> : w.watch_status === 'outside' ? <Badge kind="danger">{t('outSafeZone')}</Badge> : <Badge kind="gray">{t('zoneUnknown')}</Badge>}</td>
+        </tr>)}</tbody></table>{!data?.length && <Empty text={t('watchNone')} />}</div>
+    </div>
+  );
+}
+
 function SettingsPage() {
   const { t } = useT();
   const { data, reload } = useLoad<any>('/settings');
+  const { data: dash } = useLoad<any>('/dashboard');
   const [f, setF] = useState<any>(null);
   const [msg, setMsg] = useState('');
   const { Err, show } = useErr();
@@ -98,6 +121,7 @@ function SettingsPage() {
         <div className="row"><Btn v="" onClick={save}>{t('save')}</Btn><Btn v="ghost" onClick={test} disabled={!f.ntfy_topic}>{t('testPush')}</Btn>
           {f.ntfy_topic && <a className="small" href={`${f.ntfy_url.replace(/\/$/, '')}/${f.ntfy_topic}`} target="_blank" rel="noreferrer">{f.ntfy_url.replace(/^https?:\/\//, '')}/{f.ntfy_topic}</a>}</div>
       </div>
+      <div className="card"><h3>📱 Firebase</h3><p className="small muted">{dash?.integrations?.fcm ? '✅ ' + t('pushReady') : '⚠️ ' + t('pushNotConfigured')}</p></div>
       <div className="card"><h3><IonIcon icon={cloudDownloadOutline} /> {t('backupTitle')}</h3>
         <p className="small muted">{t('backupHelp')}</p>
         <Btn v="ghost sm" onClick={async () => { await api('/backups', { body: {} }); reload(); }}>{t('backupNow')}</Btn>

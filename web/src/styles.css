@@ -273,3 +273,10 @@ ion-button + ion-button { margin-left: 0; }
 .qr-wrap { text-align: center; }
 .qr-wrap img { border-radius: 12px; border: 1px solid var(--line); background: #fff; padding: 6px; }
 .qr-wrap .code { font-size: 1.4rem; font-weight: 800; letter-spacing: .18em; color: var(--brand); margin: .4rem 0; }
+
+/* 手表 */
+.watch-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin-top: .5rem; }
+.watch-stats div { background: var(--bg); border-radius: 10px; padding: .6rem .4rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: .1rem; }
+.watch-stats ion-icon { font-size: 1.4rem; color: var(--brand); }
+.watch-stats b { font-size: 1.05rem; } .watch-stats span { font-size: .72rem; color: var(--muted); }
+.trail { width: 100%; height: auto; margin-top: .6rem; background: #f3f6f4; border-radius: 10px; border: 1px solid var(--line); }

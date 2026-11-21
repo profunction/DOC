@@ -34,6 +34,7 @@ export default function Elder() {
   const [sosState, setSosState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
   const [alertId, setAlertId] = useState<number | null>(null);
   const [alertStatus, setAlertStatus] = useState<string>('new');
+  const [lastPos, setLastPos] = useState<{ lat?: number; lng?: number }>({});
   const [summary, setSummary] = useState<any>(null);
   const [hold, setHold] = useState(0);
   const holdTimer = useRef<number | null>(null);
@@ -63,7 +64,7 @@ export default function Elder() {
 
   async function sendSos() {
     setSheet('sos'); setSosState('sending');
-    const pos = await getPosition();
+    const pos = await getPosition(); setLastPos(pos);
     try {
       const a = await api('/alerts', { body: { type: 'sos', source: 'app', ...pos } });
       setAlertId(a.id); setAlertStatus('new'); setSosState('sent');
@@ -118,9 +119,11 @@ export default function Elder() {
         <div className="sheet">
           {sosState === 'sending' && <h2>⏳ {t('sosSending')}</h2>}
           {sosState === 'sent' && <><h2>{alertStatus === 'new' ? '✅ ' : ''}{statusText[alertStatus]}</h2><p>{t('sosSentHint')}</p></>}
-          {sosState === 'failed' && <h2 style={{ color: 'var(--danger)' }}>⚠️ {t('sosFailed')}</h2>}
+          {sosState === 'failed' && <><h2 style={{ color: 'var(--danger)' }}>⚠️ {t('sosFailed')}</h2><p>{t('sosOfflineHint')}</p></>}
           <div className="stack" style={{ marginTop: '1rem' }}>
             <Btn v="block danger" href={telLink(hotline)}>📞 {t('callCenter')}</Btn>
+            {sosState === 'failed' && <Btn v="block" href={`sms:+${hotline}?body=${encodeURIComponent(`SOS ${user?.name}${lastPos.lat ? ` https://www.google.com/maps?q=${lastPos.lat},${lastPos.lng}` : ''}`)}`}>💬 {t('smsFallback')}</Btn>}
+            {sosState === 'failed' && <Btn v="block ghost" onClick={sendSos}>{t('retry')}</Btn>}
             <Btn v="block ghost" onClick={cancelSos}>{t('cancelSos')}</Btn>
           </div>
         </div>

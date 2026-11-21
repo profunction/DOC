@@ -5,6 +5,7 @@ import { IonApp, IonIcon } from '@ionic/react';
 import { useState } from 'react';
 import { fingerPrintOutline } from 'ionicons/icons';
 import { bio } from './native';
+import { startPush } from './push';
 import { useT } from './i18n';
 import { useStore } from './store';
 import { isNative } from './api';
@@ -64,6 +65,9 @@ function BioGate({ children }: { children: JSX.Element }) {
 }
 
 function AppShell() {
+  const { user } = useStore();
+  const nav = useNavigate();
+  useEffect(() => { if (user) startPush(p => nav(p)); }, [user?.id]);
   return (
     <IonApp><BioGate><>
       <Routes>

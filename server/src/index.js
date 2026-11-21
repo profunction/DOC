@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { api } from './routes.js';
 import { seedIfEmpty, ensureAdmin } from './seed.js';
 import { scheduleBackups } from './settings.js';
+import { scheduleOfflineCheck } from './watch.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8787);
@@ -14,7 +15,7 @@ const DOWNLOADS_DIR = process.env.DOWNLOADS_DIR || path.join(__dirname, '..', '.
 
 if (process.env.SEED_DEMO !== '0') seedIfEmpty();
 ensureAdmin();
-if (process.env.NODE_ENV !== 'test') scheduleBackups();
+if (process.env.NODE_ENV !== 'test') { scheduleBackups(); scheduleOfflineCheck(); }
 
 const app = express();
 app.disable('x-powered-by');

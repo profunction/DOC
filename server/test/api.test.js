@@ -204,3 +204,50 @@ test('coordinator settings: hotline from the app, backups', async () => {
   assert.equal((await j('/backups/..%2Fanxin.db', {}, coord)).status, 400);
   await j('/settings', { method: 'PUT', body: { hotline: '', ntfy_topic: '' } }, coord);
 });
+
+test('watch: positions, safe zone, low battery, heart rate, SOS alarm, offline check, family view', async () => {
+  const coord = await login('0100000001'); const fam = await login('0100000012');
+  // 设安全范围：家的位置 300 米
+  const w = (await j('/clients/1/watch', { method: 'PATCH', body: { safe_lat: 1.4855, safe_lng: 103.767, safe_radius: 300, hr_min: 45, hr_max: 120 } }, fam)).data;
+  assert.equal(w.safe_radius, 300);
+  const T = (body) => fetch(B + '/integrations/traccar/position?key=test-traccar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+  // 在家
+  let r = await T({ device: { uniqueId: 'WT-0001' }, position: { latitude: 1.4856, longitude: 103.7671, fixTime: '2026-11-21T01:00:00Z', attributes: { batteryLevel: 80, heartRate: 70 } } });
+  assert.equal(r.status, 'inside'); assert.deepEqual(r.alerts, []);
+  // 走出 1 公里
+  r = await T({ device: { uniqueId: 'WT-0001' }, position: { latitude: 1.4945, longitude: 103.767, attributes: { batteryLevel: 15, heartRate: 135 } } });
+  assert.equal(r.status, 'outside'); assert.equal(r.alerts.length, 3);   // 围栏 + 低电 + 心跳
+  const open = (await j('/alerts?status=open&client_id=1', {}, coord)).data;
+  assert.ok(open.some(a => a.type === 'geofence') && open.some(a => a.type === 'battery') && open.some(a => a.type === 'heart'));
+  // 同样的情况不重复报
+  r = await T({ device: { uniqueId: 'WT-0001' }, position: { latitude: 1.4946, longitude: 103.767, attributes: { batteryLevel: 14, heartRate: 136 } } });
+  assert.deepEqual(r.alerts, []);
+  // 手表 SOS（事件转发）
+  const ev = await fetch(B + '/integrations/traccar?key=test-traccar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ event: { type: 'alarm', attributes: { alarm: 'sos' } }, device: { uniqueId: 'WT-0001' }, position: { latitude: 1.4946, longitude: 103.767, attributes: {} } }) }).then(x => x.json());
+  assert.equal(ev.alerts.length, 1);
+  assert.ok((await j('/alerts?status=open&client_id=1', {}, coord)).data.some(a => a.type === 'sos' && a.source === 'watch'));
+  // 子女看到位置、电量、轨迹
+  const fw = (await j('/clients/1/watch', {}, fam)).data;
+  assert.equal(fw.watch_battery, 14); assert.equal(fw.watch_status, 'outside'); assert.equal(fw.last.lat, 1.4946); assert.equal(fw.offline, false);
+  assert.ok((await j('/clients/1/watch/trail', {}, fam)).data.length >= 3);
+  assert.equal((await j('/clients/2/watch', {}, fam)).status, 403);
+  // 未知手表被忽略
+  assert.equal((await T({ device: { uniqueId: 'NOPE' }, position: { latitude: 1, longitude: 1 } })).ignored, 'unknown_watch');
+  // 离线检查：把最后信号改成 7 小时前
+  const Database = (await import('better-sqlite3')).default;
+  const db = new Database(path.join(tmp, 'anxin.db')); db.prepare(`UPDATE clients SET watch_last_seen = datetime('now', '-7 hours') WHERE id = 2`).run(); db.close();
+  assert.ok((await j('/watch/check-offline', { method: 'POST', body: {} }, coord)).data.checked >= 1);
+  assert.ok((await j('/alerts?status=open&client_id=2', {}, coord)).data.some(a => a.type === 'offline'));
+  // 协调员总览与模拟
+  assert.ok((await j('/watch/overview', {}, coord)).data.length >= 2);
+  const sim = (await j('/clients/3/watch/simulate', { body: { alarm: 'fallDown' } }, coord)).data;
+  assert.equal(sim.alerts.length, 1);
+  assert.ok((await j('/alerts?status=open&client_id=3', {}, coord)).data.some(a => a.type === 'fall'));
+});
+
+test('push tokens: saved per user; FCM silently off without a service account', async () => {
+  const fam = await login('0100000012');
+  const r = (await j('/push/token', { body: { token: 'fcm-token-abcdefghijklmnopqrstuvwxyz', platform: 'android' } }, fam)).data;
+  assert.equal(r.ok, true); assert.equal(r.fcm, false);
+  assert.equal((await j('/push/token', { method: 'DELETE', body: { token: 'fcm-token-abcdefghijklmnopqrstuvwxyz' } }, fam)).status, 200);
+});

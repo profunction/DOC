@@ -132,7 +132,8 @@ export function useLoad<T>(path: string | null, deps: any[] = [], refreshOn?: st
 
 export function Badge({ kind, children }: { kind?: string; children: ReactNode }) {
   const map: Record<string, string> = { new: 'danger', acknowledged: 'warn', dispatched: 'warn', resolved: 'ok', requested: 'warn', assigned: '', in_progress: 'warn', done: 'ok', cancelled: 'gray', due: 'warn', paid: 'ok', preparing: 'gray', submitted: 'warn', approved: 'ok', rejected: 'danger', active: 'ok', inactive: 'gray', mild: 'warn', severe: 'danger', false: 'gray' };
-  return <span className={`badge ${map[kind || ''] || ''}`}>{children}</span>;
+  const cls = map[kind || ''] ?? (['ok', 'warn', 'danger', 'gray'].includes(kind || '') ? kind : '');
+  return <span className={`badge ${cls || ''}`}>{children}</span>;
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {

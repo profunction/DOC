@@ -6,6 +6,7 @@ services:
       NTFY_URL: http://ntfy
       NTFY_TOPIC: ${NTFY_TOPIC:-anxin-alerts}
       TRACCAR_KEY: ${TRACCAR_KEY:?请在 .env 设置}
+      FCM_SERVICE_ACCOUNT: ${FCM_SERVICE_ACCOUNT:-}
     depends_on: [ntfy]
 
   traccar:                      # https://www.traccar.org  Apache-2.0
