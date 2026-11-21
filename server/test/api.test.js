@@ -17,7 +17,7 @@ const login = async (phone) => (await j('/auth/login', { body: { phone, password
 
 before(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'anxin-test-'));
-  proc = spawn(process.execPath, ['src/index.js'], { env: { ...process.env, PORT: String(PORT), DATA_DIR: tmp, JWT_SECRET: 'test', WEB_DIR: '/nonexistent', TRACCAR_KEY: 'test-traccar' }, stdio: 'ignore' });
+  proc = spawn(process.execPath, ['src/index.js'], { env: { ...process.env, PORT: String(PORT), DATA_DIR: tmp, JWT_SECRET: 'test', WEB_DIR: '/nonexistent', TRACCAR_KEY: 'test-traccar', NODE_ENV: 'test' }, stdio: 'ignore' });
   for (let i = 0; i < 50; i++) { try { await fetch(B + '/public/info'); return; } catch { await new Promise(r => setTimeout(r, 200)); } }
   throw new Error('server did not start');
 });
@@ -170,4 +170,37 @@ test('self registration: immediate access to the parent profile they created, no
   assert.equal((await j('/enquiries', {}, coord)).data.find(x => x.phone === '0199990001').status, 'done');
   assert.ok((await j(`/messages?client_id=${cid}`, {}, r.token)).data.some(m => m.text.includes('正式开通')));
   assert.equal((await j('/public/register', { body: { name: '重复', phone: '0199990001', password: 'secret88', agree: true, parent_name: 'P' } })).data.error, 'phone_exists');
+});
+
+test('elder phone setup by family: QR invite activates without password and stays logged in', async () => {
+  const fam = await login('0100000022');   // 林志豪，林伯伯（客人 2）的儿子
+  assert.equal((await j('/clients/1/elder-device', { method: 'POST', body: {} }, fam)).status, 403);   // 不能为别人的父母设置
+  const r = (await j('/clients/2/elder-device', { method: 'POST', body: {} }, fam)).data;
+  assert.ok(r.invite);
+  const info = (await j(`/public/invite/${r.invite}`)).data;
+  assert.equal(info.role, 'elder');
+  const act = (await j(`/public/invite/${r.invite}`, { body: { device: true } })).data;
+  assert.ok(act.token); assert.equal(act.user.role, 'elder');
+  const me = (await j('/me', {}, act.token)).data;
+  assert.deepEqual(me.client_ids, [2]); assert.ok(me.token, 'token renewed on /me');
+  // 非长者的启用码不能免密码
+  const coord = await login('0100000001');
+  const fu = (await j('/users', { body: { phone: '0177770099', name: '某家属', role: 'family', client_id: 1 } }, coord)).data;
+  assert.equal((await j(`/public/invite/${fu.invite}`, { body: { device: true } })).status, 400);
+});
+
+test('coordinator settings: hotline from the app, backups', async () => {
+  const coord = await login('0100000001'); const fam = await login('0100000012');
+  assert.equal((await j('/settings', {}, fam)).status, 403);
+  assert.equal((await j('/settings', { method: 'PUT', body: { hotline: '60166412393', ntfy_topic: 'anxin-test-xyz' } }, coord)).status, 200);
+  assert.equal((await j('/public/info')).data.hotline, '60166412393');
+  const s = (await j('/settings', {}, coord)).data;
+  assert.equal(s.ntfy_topic, 'anxin-test-xyz');
+  const b = (await j('/backups', { method: 'POST', body: {} }, coord)).data;
+  assert.match(b.file, /^anxin-.*\.db$/);
+  const dl = await fetch(B + `/backups/${b.file}`, { headers: { authorization: `Bearer ${coord}` } });
+  assert.equal(dl.status, 200);
+  assert.ok((await dl.arrayBuffer()).byteLength > 10000);
+  assert.equal((await j('/backups/..%2Fanxin.db', {}, coord)).status, 400);
+  await j('/settings', { method: 'PUT', body: { hotline: '', ntfy_topic: '' } }, coord);
 });

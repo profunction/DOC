@@ -3,9 +3,10 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { statsChartOutline, alertCircleOutline, gitBranchOutline, peopleCircleOutline, documentTextOutline, peopleOutline, cardOutline, businessOutline, personAddOutline, mailOpenOutline } from 'ionicons/icons';
 import { useT } from '../i18n';
 import { useStore } from '../store';
-import { api, fmtTime, compressImage, getApiBase } from '../api';
+import { api, fmtTime, compressImage, getApiBase, niceTime } from '../api';
 import { IonIcon } from '@ionic/react';
-import { cameraOutline, calendarOutline, addOutline, watchOutline, logoWhatsapp, copyOutline, refreshOutline } from 'ionicons/icons';
+import { cameraOutline, calendarOutline, addOutline, watchOutline, logoWhatsapp, copyOutline, refreshOutline, settingsOutline, notificationsOutline, cloudDownloadOutline, callOutline, personAddOutline as personAddIcon, chevronForward } from 'ionicons/icons';
+import { ElderPhoneSetup } from '../components/ElderPhoneSetup';
 import { Shell, useLoad, Badge, Field, Empty, TASK_TYPES, ALERT_TYPES, PARTNER_TYPES, PLANS, telLink, waLink, mapsLink, localDT, useErr, Btn } from '../components/ui';
 import { AlertCard, ReportCard, Chat, Team } from './Family';
 
@@ -15,7 +16,7 @@ export default function Coordinator() {
   const tabs = [
     { id: 'dashboard', label: t('dashboard'), icon: statsChartOutline }, { id: 'alerts', label: t('alerts'), icon: alertCircleOutline }, { id: 'dispatch', label: t('dispatch'), icon: gitBranchOutline },
     { id: 'clients', label: t('clients'), icon: peopleCircleOutline }, { id: 'reports', label: t('reports'), icon: documentTextOutline }, { id: 'partners', label: t('partners'), icon: peopleOutline },
-    { id: 'money', label: t('payments'), icon: cardOutline }, { id: 'aid', label: t('aid'), icon: businessOutline }, { id: 'users', label: t('users'), icon: personAddOutline }, { id: 'enquiries', label: t('enquiries'), icon: mailOpenOutline },
+    { id: 'money', label: t('payments'), icon: cardOutline }, { id: 'aid', label: t('aid'), icon: businessOutline }, { id: 'users', label: t('users'), icon: personAddOutline }, { id: 'enquiries', label: t('enquiries'), icon: mailOpenOutline }, { id: 'settings', label: t('settings'), icon: settingsOutline },
   ];
   return (
     <Shell title={`${t('appName')} · ${t('roleCoordinator')}`} tabs={tabs} tab={tab} onTab={setTab}>
@@ -29,21 +30,79 @@ export default function Coordinator() {
       {tab === 'aid' && <Aid />}
       {tab === 'users' && <Users />}
       {tab === 'enquiries' && <Enquiries />}
+      {tab === 'settings' && <SettingsPage />}
     </Shell>
   );
 }
 
 function Dashboard({ go }: { go: (t: string) => void }) {
   const { t } = useT();
-  const { data: d } = useLoad<any>('/dashboard', [], ['alert', 'task', 'report']);
+  const { data: d } = useLoad<any>('/dashboard', [], ['alert', 'task', 'report', 'message']);
   const { data: open } = useLoad<any[]>('/alerts?status=open', [], ['alert']);
+  const { data: clients, reload: reloadClients } = useLoad<any[]>('/clients', [], ['message']);
+  const { data: requested } = useLoad<any[]>('/tasks?status=requested', [], ['task']);
+  const { data: tasks } = useLoad<any[]>(`/tasks?from=${new Date().toISOString().slice(0, 10)}`, [], ['task']);
   if (!d) return <p className="muted">{t('loading')}</p>;
-  const stats = [['clientsCount', d.clients], ['unverifiedBadge', d.unverified, d.unverified ? 'alert' : ''], ['openAlerts', d.openAlerts, 'alert'], ['todayTasks', d.todayTasks], ['unassigned', d.unassigned], ['monthlyRevenue', `RM ${d.monthlyRevenue}`], ['dueTotal', `RM ${d.dueTotal}`], ['newEnquiries', d.newEnquiries]];
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todays = (tasks || []).filter(x => x.scheduled_at.slice(0, 10) === todayStr && x.status !== 'cancelled').sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+  const unverified = (clients || []).filter(c => c.verified === 0);
+  const nothing = !open?.length && !unverified.length && !requested?.length;
+  const stats = [['clientsCount', d.clients], ['todayTasks', d.todayTasks], ['monthlyRevenue', `RM ${d.monthlyRevenue}`], ['dueTotal', `RM ${d.dueTotal}`]];
   return (
     <div>
-      {open?.map(a => <div key={a.id} className="alert-banner" onClick={() => go('alerts')}>🚨 {a.client_name} · {t('a_' + a.type)} · {t('as_' + a.status)} · {fmtTime(a.created_at).slice(11)}</div>)}
+      {open?.map(a => <div key={a.id} className="alert-banner" onClick={() => go('alerts')}>🚨 {a.client_name} · {t('a_' + a.type)} · {t('as_' + a.status)} · {niceTime(a.created_at)}</div>)}
+      <div className="card"><h3>{t('todoTitle')}</h3>
+        {nothing && <p className="muted">{t('noTodo')}</p>}
+        <div className="list">
+          {unverified.map(c => <div key={'u' + c.id} className="todo-row"><Badge kind="new">{t('unverifiedBadge')}</Badge><span className="grow"><b>{c.name}</b><div className="small muted">{c.emergency_contact}</div></span>
+            <Btn v="ok sm" onClick={async () => { await api(`/clients/${c.id}`, { method: 'PATCH', body: { verified: 1 } }); reloadClients(); }}>{t('confirmService')}</Btn></div>)}
+          {(requested || []).map(x => <div key={'r' + x.id} className="todo-row"><Badge kind="requested">{t('s_requested')}</Badge><span className="grow"><b>{x.title} · {x.client_name}</b><div className="small muted">{niceTime(x.scheduled_at)}</div></span>
+            <Btn v="sm" onClick={() => go('dispatch')}>{t('assign')}<IonIcon slot="end" icon={chevronForward} /></Btn></div>)}
+        </div>
+      </div>
+      <div className="card"><h3><IonIcon icon={calendarOutline} /> {t('todayTasks')}</h3>
+        {!todays.length && <p className="muted">{t('none')}</p>}
+        <div className="list">{todays.map(x => <div key={x.id} className="todo-row"><span className="time">{niceTime(x.scheduled_at).split(' ').pop()}</span><span className="grow"><b>{x.title}</b> · {x.client_name}<div className="small muted">{x.assignee_name || x.partner_name || t('s_requested')}</div></span><Badge kind={x.status}>{t('s_' + x.status)}</Badge></div>)}</div>
+      </div>
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
-        {stats.map(([k, v, cls]) => <div key={k as string} className={`card stat ${cls || ''}`}><div className="n">{v as any}</div><div className="l">{t(k as string)}</div></div>)}
+        {stats.map(([k, v]) => <div key={k as string} className="card stat"><div className="n">{v as any}</div><div className="l">{t(k as string)}</div></div>)}
+      </div>
+    </div>
+  );
+}
+
+function SettingsPage() {
+  const { t } = useT();
+  const { data, reload } = useLoad<any>('/settings');
+  const [f, setF] = useState<any>(null);
+  const [msg, setMsg] = useState('');
+  const { Err, show } = useErr();
+  useEffect(() => { if (data) setF({ hotline: data.hotline, ntfy_url: data.ntfy_url, ntfy_topic: data.ntfy_topic }); }, [data]);
+  if (!data || !f) return <p className="muted">{t('loading')}</p>;
+  const save = async () => { try { await api('/settings', { method: 'PUT', body: f }); setMsg(t('save') + ' ✓'); reload(); setTimeout(() => setMsg(''), 2000); } catch (e) { show(e); } };
+  const gen = () => setF({ ...f, ntfy_topic: 'anxin-' + Array.from(crypto.getRandomValues(new Uint8Array(9))).map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('') });
+  const test = async () => { await save(); try { const r = await api('/settings/test-push', { body: {} }); setMsg(r.ok ? t('pushOk') : t('pushFail')); } catch (e) { show(e); } };
+  const base = getApiBase() || window.location.origin;
+  return (
+    <div>
+      {Err}{msg && <div className="success">{msg}</div>}
+      <div className="card"><h3><IonIcon icon={callOutline} /> {t('hotline')}</h3>
+        <Field label={t('hotlineSetting')}><input inputMode="tel" value={f.hotline} onChange={e => setF({ ...f, hotline: e.target.value })} placeholder="60123456789" /></Field>
+        <Btn v="" onClick={save}>{t('save')}</Btn></div>
+      <div className="card"><h3><IonIcon icon={notificationsOutline} /> {t('ntfyTitle')}</h3>
+        <p className="small muted">{t('ntfyHelp')}</p>
+        <div className="form-grid">
+          <Field label={t('ntfyServer')}><input value={f.ntfy_url} onChange={e => setF({ ...f, ntfy_url: e.target.value })} /></Field>
+          <Field label={t('ntfyTopic')}><div className="row" style={{ flexWrap: 'nowrap' }}><input value={f.ntfy_topic} onChange={e => setF({ ...f, ntfy_topic: e.target.value })} style={{ flex: 1 }} /><Btn v="ghost sm" onClick={gen}>{t('genTopic')}</Btn></div></Field>
+        </div>
+        <div className="row"><Btn v="" onClick={save}>{t('save')}</Btn><Btn v="ghost" onClick={test} disabled={!f.ntfy_topic}>{t('testPush')}</Btn>
+          {f.ntfy_topic && <a className="small" href={`${f.ntfy_url.replace(/\/$/, '')}/${f.ntfy_topic}`} target="_blank" rel="noreferrer">{f.ntfy_url.replace(/^https?:\/\//, '')}/{f.ntfy_topic}</a>}</div>
+      </div>
+      <div className="card"><h3><IonIcon icon={cloudDownloadOutline} /> {t('backupTitle')}</h3>
+        <p className="small muted">{t('backupHelp')}</p>
+        <Btn v="ghost sm" onClick={async () => { await api('/backups', { body: {} }); reload(); }}>{t('backupNow')}</Btn>
+        <div className="list" style={{ marginTop: '.5rem' }}>{(data.backups || []).map((b: any) => <div key={b.file} className="row between small"><span>{b.file} · {(b.size / 1024).toFixed(0)} KB</span>
+          <a href={`${base}/api/backups/${b.file}?token=${encodeURIComponent(localStorage.getItem('anxin.token') || '')}`} download>{t('download')}</a></div>)}</div>
       </div>
     </div>
   );
@@ -148,7 +207,7 @@ function Dispatch() {
       {data?.map(x => (
         <div className="card" key={x.id}>
           <div className="row between"><b>{x.title} · {x.client_name}</b><Badge kind={x.status}>{t('s_' + x.status)}</Badge></div>
-          <div className="small muted">{fmtTime(x.scheduled_at)} · {x.client_region} · {x.notes} {x.fee ? `· RM${x.fee}` : ''}</div>
+          <div className="small muted">{niceTime(x.scheduled_at)} · {x.client_region} · {x.notes} {x.fee ? `· RM${x.fee}` : ''}</div>
           <div className="row small" style={{ marginTop: '.4rem' }}>
             <span>{t('assignTo')}:</span>
             <select value={x.assignee_user_id || ''} onChange={e => patch(x.id, { assignee_user_id: Number(e.target.value) || null })}><option value="">—</option>{cgs?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
@@ -254,18 +313,24 @@ function ClientDetail({ id, back }: { id: number; back: () => void }) {
               {[['conditions', h.conditions], ['meds', h.meds], ['allergies', h.allergies], ['doctor', h.doctor], ['mobility', h.mobility], ['langDiet', [h.language, h.diet].filter(Boolean).join(' / ')], ['healthNotes', h.notes], ['emergencyContact', c.emergency_contact], ['preferredHospital', c.preferred_hospital], ['notes', c.notes]].map(([k, v]) => <tr key={k as string}><th style={{ width: '32%' }}>{t(k as string)}</th><td>{v || '-'}</td></tr>)}
             </tbody></table>
           </div>
+          <ElderPhoneSetup clientId={id} />
           <div className="card"><h3><IonIcon icon={peopleOutline} /> {t('familyMembers')}</h3>
             <div className="list">{c.family?.map((f: any) => <div key={f.id} className="row between"><span>{f.name} <span className="muted small">{f.relation}</span></span><span className="row small"><a href={telLink(f.phone)}>📞 {f.phone}</a><a href={waLink(f.phone)} target="_blank" rel="noreferrer">💬</a></span></div>)}</div>
             <form onSubmit={link} className="row" style={{ marginTop: '.6rem' }}><input placeholder={t('familyPhone')} value={famPhone} onChange={e => setFamPhone(e.target.value)} style={{ padding: '.5rem', border: '1px solid var(--line)', borderRadius: 8 }} required /><input placeholder={t('relation')} value={rel} onChange={e => setRel(e.target.value)} style={{ padding: '.5rem', border: '1px solid var(--line)', borderRadius: 8, width: 100 }} /><Btn v="sm">{t('linkFamily')}</Btn></form>
           </div>
           {s && <div className="grid">
-            <div className="card"><h3><IonIcon icon={calendarOutline} /> {t('today')} / {t('upcoming')}</h3><div className="list">{[...s.todayTasks, ...s.upcoming].map((x: any) => <div key={x.id} className="row between small"><span>{fmtTime(x.scheduled_at)} {x.title} · {x.assignee_name || ''}</span><Badge kind={x.status}>{t('s_' + x.status)}</Badge></div>)}{!s.todayTasks.length && !s.upcoming.length && <Empty />}</div></div>
+            <div className="card"><h3><IonIcon icon={calendarOutline} /> {t('today')} / {t('upcoming')}</h3><div className="list">{[...s.todayTasks, ...s.upcoming].map((x: any) => <div key={x.id} className="row between small"><span>{niceTime(x.scheduled_at)} {x.title} · {x.assignee_name || ''}</span><Badge kind={x.status}>{t('s_' + x.status)}</Badge></div>)}{!s.todayTasks.length && !s.upcoming.length && <Empty />}</div></div>
             <div className="card"><h3><IonIcon icon={documentTextOutline} /> {t('lastReport')}</h3>{s.lastReport ? <ReportCard r={s.lastReport} /> : <Empty />}</div>
           </div>}
         </>
       ))}
     </div>
   );
+}
+
+/** 点选按钮：点一下填入，也可以在下面的输入框补充 */
+function Chips({ value, options, onPick }: { value: string; options: string[]; onPick: (v: string) => void }) {
+  return <div className="chips">{options.map(o => <button type="button" key={o} className={value === o ? 'on' : ''} onClick={() => onPick(value === o ? '' : o)}>{o}</button>)}</div>;
 }
 
 export function ReportForm({ cid, taskId, onSaved }: { cid: number; taskId?: number; onSaved: () => void }) {
@@ -297,10 +362,11 @@ export function ReportForm({ cid, taskId, onSaved }: { cid: number; taskId?: num
         </div>
         <div className="form-grid">
         <Field label={t('reportKind')}><select {...S('kind')}><option value="visit">{t('visit')}</option><option value="consult">{t('consult')}</option></select></Field>
-        <Field label={t('mood')}><input {...S('mood')} /></Field><Field label={t('bp')}><input {...S('bp')} placeholder="130/80" /></Field>
+        <Field label={t('mood')}><Chips value={f.mood} options={[t('moodGood'), t('moodOk'), t('moodBad'), t('moodWatch')]} onPick={v => setF({ ...f, mood: v })} /><input {...S('mood')} /></Field><Field label={t('bp')}><input inputMode="numeric" {...S('bp')} placeholder="130/80" /></Field>
         <Field label={t('glucose')}><input {...S('glucose')} /></Field><Field label={t('temp')}><input {...S('temp')} /></Field>
-        <Field label={t('medsTaken')}><input {...S('meds')} /></Field><Field label={t('dietSleep')}><input {...S('diet_sleep')} /></Field>
-        <Field label={t('homeSafety')}><input {...S('home_safety')} /></Field><Field label={t('requests')}><input {...S('requests')} /></Field>
+        <Field label={t('medsTaken')}><Chips value={f.meds} options={[t('medsOnTime'), t('medsMissed'), t('medsNone'), t('medsNA')]} onPick={v => setF({ ...f, meds: v })} /><input {...S('meds')} /></Field>
+        <Field label={t('dietSleep')}><Chips value={f.diet_sleep} options={[t('dietOk'), t('dietLess'), t('dietPoor')]} onPick={v => setF({ ...f, diet_sleep: v })} /><input {...S('diet_sleep')} /></Field>
+        <Field label={t('homeSafety')}><Chips value={f.home_safety} options={[t('safeOk'), t('safeRisk')]} onPick={v => setF({ ...f, home_safety: v })} /><input {...S('home_safety')} /></Field><Field label={t('requests')}><input {...S('requests')} /></Field>
         <Field label={t('followUp')}><input {...S('follow_up')} /></Field>
       </div><Btn v="">{t('submit')}</Btn></form>
     </div>
@@ -483,14 +549,14 @@ function Enquiries() {
   return (
     <div>
       <div className="card"><h3>{t('enquiries')}</h3>{!data?.length && <Empty />}<div className="list">{data?.map(e => <div key={e.id} style={e.status === 'done' ? { opacity: .55 } : undefined}>
-        <div className="row between"><b>{e.name} · <a href={waLink(e.phone)} target="_blank" rel="noreferrer">{e.phone}</a></b><span className="row small muted"><Badge kind={e.status === 'done' ? 'done' : 'new'}>{e.status === 'done' ? t('handled') : t('pendingBadge')}</Badge><Badge kind={e.source === 'register' ? '' : 'gray'}>{e.source === 'register' ? t('registeredBadge') : e.source === 'app' ? 'App' : 'Web'}</Badge>{fmtTime(e.created_at)}</span></div>
+        <div className="row between"><b>{e.name} · <a href={waLink(e.phone)} target="_blank" rel="noreferrer">{e.phone}</a></b><span className="row small muted"><Badge kind={e.status === 'done' ? 'done' : 'new'}>{e.status === 'done' ? t('handled') : t('pendingBadge')}</Badge><Badge kind={e.source === 'register' ? '' : 'gray'}>{e.source === 'register' ? t('registeredBadge') : e.source === 'app' ? 'App' : 'Web'}</Badge>{niceTime(e.created_at)}</span></div>
         <div className="small">{e.city} · {e.message}</div>
         {e.status !== 'done' && e.user_id && e.client_id && <div className="row small" style={{ marginTop: '.4rem' }}><Badge kind="new">{t('unverifiedBadge')}</Badge><span>{t('registeredParent')}：<b>{e.client_name}</b></span>
           <Btn v="ok sm" onClick={async () => { await api(`/clients/${e.client_id}`, { method: 'PATCH', body: { verified: 1 } }); reload(); }}>{t('confirmService')}</Btn></div>}
         {e.status !== 'done' && e.user_id && !e.client_id && <LinkRegistered e={e} clients={clients || []} onDone={reload} />}
         {e.status !== 'done' && !e.user_id && <Btn v="ghost sm" onClick={async () => { await api(`/enquiries/${e.id}`, { method: 'PATCH', body: { status: 'done' } }); reload(); }}>{t('markHandled')}</Btn>}
       </div>)}</div></div>
-      <div className="card"><h3>{t('audit')}</h3><div className="tbl-wrap"><table className="tbl"><tbody>{audit?.slice(0, 50).map(a => <tr key={a.id}><td className="small muted">{fmtTime(a.at)}</td><td>{a.user_name}</td><td>{a.action}</td><td>{a.target}</td></tr>)}</tbody></table></div></div>
+      <div className="card"><h3>{t('audit')}</h3><div className="tbl-wrap"><table className="tbl"><tbody>{audit?.slice(0, 50).map(a => <tr key={a.id}><td className="small muted">{niceTime(a.at)}</td><td>{a.user_name}</td><td>{a.action}</td><td>{a.target}</td></tr>)}</tbody></table></div></div>
     </div>
   );
 }

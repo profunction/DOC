@@ -6,6 +6,9 @@ import { subscribe, broadcastClient, broadcastUser } from './events.js';
 import { pushNtfy, traccarHandler, integrationStatus } from './integrations.js';
 import { uploads } from './uploads.js';
 import { createInvite, findInvite, useInvite, unusablePasswordHash, maskPhone, rateLimit, failures } from './accounts.js';
+import { getSetting, setSetting, getHotline, SETTING_KEYS, backupNow, listBackups, BACKUP_DIR } from './settings.js';
+import path from 'node:path';
+import crypto from 'node:crypto';
 
 export const api = Router();
 const pub = Router();
@@ -17,7 +20,6 @@ try { db.exec(`ALTER TABLE enquiries ADD COLUMN source TEXT`); } catch { /* 已�
 try { db.exec(`ALTER TABLE enquiries ADD COLUMN status TEXT NOT NULL DEFAULT 'new'`); } catch { /* 已存在 */ }
 try { db.exec(`ALTER TABLE enquiries ADD COLUMN user_id INTEGER`); } catch { /* 已存在 */ }
 
-const HOTLINE = process.env.HOTLINE_PHONE || '60123456789';
 
 function safeUser(u) {
   if (!u) return null;
@@ -43,6 +45,7 @@ function guardClient(req, res) {
 
 // ---------- 公开 ----------
 pub.get('/info', (req, res) => {
+  const HOTLINE = getHotline();
   res.json({
     hotline: HOTLINE,
     demo: process.env.SEED_DEMO !== '0',
@@ -107,9 +110,12 @@ pub.get('/invite/:code', rateLimit('invite', 20), (req, res) => {
   res.json({ name: inv.name, phone: maskPhone(inv.phone), role: inv.role, expires_at: inv.expires_at });
 });
 pub.post('/invite/:code', rateLimit('invite', 20), (req, res) => {
+  const inv = findInvite(req.params.code);
+  if (!inv) return res.status(404).json({ error: 'invite_invalid' });
+  const device = inv.role === 'elder' && req.body?.device === true;   // 长者手机：不用密码
   const pw = String(req.body?.password || '');
-  if (pw.length < 6) return res.status(400).json({ error: 'password_too_short' });
-  const u = useInvite(req.params.code, pw);
+  if (!device && pw.length < 6) return res.status(400).json({ error: 'password_too_short' });
+  const u = useInvite(req.params.code, device ? null : pw);
   if (!u) return res.status(404).json({ error: 'invite_invalid' });
   res.json({ token: sign(u), user: safeUser(u) });
 });
@@ -131,7 +137,8 @@ api.use(uploads);
 
 api.get('/me', (req, res) => {
   const clients = clientIdsFor(req.user);
-  res.json({ user: req.user, client_ids: clients, hotline: HOTLINE });
+  // 每次打开 App 换一个新 token，常用的人永远不会被登出
+  res.json({ user: req.user, client_ids: clients, hotline: getHotline(), token: sign(req.user) });
 });
 api.patch('/me', (req, res) => {
   const { lang, name } = req.body || {};
@@ -448,6 +455,23 @@ api.post('/users', requireRole('coordinator'), (req, res) => {
     res.status(400).json({ error: /UNIQUE/.test(String(e)) ? 'phone_exists' : 'db_error' });
   }
 });
+// 设置长者的手机：没有长者账号就建一个，然后生成启用码（子女可为自己关联的父母操作）
+api.post('/clients/:id/elder-device', requireRole('coordinator', 'family'), (req, res) => {
+  const cid = Number(req.params.id);
+  if (!canSeeClient(req.user, cid)) return res.status(403).json({ error: 'forbidden' });
+  const client = db.prepare('SELECT id, name FROM clients WHERE id = ?').get(cid);
+  if (!client) return res.status(404).json({ error: 'not_found' });
+  let elder = db.prepare(`SELECT id, name, phone FROM users WHERE role = 'elder' AND client_id = ? AND active = 1 ORDER BY id LIMIT 1`).get(cid);
+  if (!elder) {
+    const want = String(req.body?.phone || '').replace(/[^0-9+]/g, '');
+    const phone = want && !db.prepare('SELECT id FROM users WHERE phone = ?').get(want) ? want : `elder-${cid}-${crypto.randomBytes(3).toString('hex')}`;
+    const r = db.prepare('INSERT INTO users (phone, password_hash, name, role, lang, client_id) VALUES (?,?,?,?,?,?)').run(phone, unusablePasswordHash(), client.name, 'elder', req.user.lang || 'zh', cid);
+    elder = { id: Number(r.lastInsertRowid), name: client.name, phone };
+    audit(req.user.id, 'create_elder_account', `client:${cid}`);
+  }
+  res.json({ invite: createInvite(elder.id, req.user.id), name: elder.name });
+});
+
 api.post('/users/:id/invite', requireRole('coordinator'), (req, res) => {
   const u = db.prepare('SELECT id, name, phone FROM users WHERE id = ? AND active = 1').get(Number(req.params.id));
   if (!u) return res.status(404).json({ error: 'not_found' });
@@ -484,6 +508,33 @@ api.post('/clients/:id/family', requireRole('coordinator'), (req, res) => {
 api.get('/enquiries', requireRole('coordinator'), (req, res) => res.json(db.prepare(`SELECT e.*, (SELECT c.id FROM family_links f JOIN clients c ON c.id = f.client_id WHERE f.user_id = e.user_id ORDER BY c.id LIMIT 1) AS client_id,
   (SELECT c.name FROM family_links f JOIN clients c ON c.id = f.client_id WHERE f.user_id = e.user_id ORDER BY c.id LIMIT 1) AS client_name FROM enquiries e ORDER BY e.id DESC LIMIT 200`).all()));
 api.get('/audit', requireRole('coordinator'), (req, res) => res.json(db.prepare(`SELECT a.*, u.name AS user_name FROM audit_log a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.id DESC LIMIT 200`).all()));
+
+// ---------- 系统设置与备份（协调员） ----------
+api.get('/settings', requireRole('coordinator'), (req, res) => {
+  const out = Object.fromEntries(SETTING_KEYS.map(k => [k, getSetting(k)]));
+  out.ntfy_token = out.ntfy_token ? '••••••' : '';
+  res.json({ ...out, backups: listBackups() });
+});
+api.put('/settings', requireRole('coordinator'), (req, res) => {
+  const b = req.body || {};
+  for (const k of SETTING_KEYS) if (b[k] !== undefined && !(k === 'ntfy_token' && b[k] === '••••••')) setSetting(k, String(b[k]).trim());
+  audit(req.user.id, 'update_settings');
+  res.json({ ok: true });
+});
+api.post('/settings/test-push', requireRole('coordinator'), async (req, res) => {
+  const ok = await pushNtfy({ title: '✅ 安心照顾测试推送', message: `${req.user.name} 发送的测试。收到这条就表示紧急警报会推到这台手机。`, priority: 'default', tags: ['white_check_mark'] });
+  res.json({ ok });
+});
+api.post('/backups', requireRole('coordinator'), async (req, res) => {
+  const f = await backupNow(); audit(req.user.id, 'backup');
+  res.json({ file: path.basename(f) });
+});
+api.get('/backups/:file', requireRole('coordinator'), (req, res) => {
+  const f = path.basename(req.params.file);
+  if (!/^anxin-[0-9-]+\.db$/.test(f)) return res.status(400).json({ error: 'bad_file' });
+  audit(req.user.id, 'download_backup', f);
+  res.download(path.join(BACKUP_DIR, f));
+});
 
 // ---------- 协调员总览 ----------
 api.get('/dashboard', requireRole('coordinator'), (req, res) => {

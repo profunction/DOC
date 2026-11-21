@@ -3,12 +3,14 @@ import { useEffect, useRef, useState } from 'react';
 import { Geolocation } from '@capacitor/geolocation';
 import { IonContent, IonIcon, IonPage } from '@ionic/react';
 import { callOutline, calendarOutline, logoWhatsapp, warningOutline } from 'ionicons/icons';
+import { App as CapApp } from '@capacitor/app';
+import { ElderMode } from '../native';
 import { useT, LANGS } from '../i18n';
 import { useStore } from '../store';
-import { api, fmtTime, isNative } from '../api';
+import { api, fmtTime, isNative, niceTime } from '../api';
 import { telLink, waLink, Btn } from '../components/ui';
 
-type Sheet = null | 'sos' | 'find' | 'plan';
+type Sheet = null | 'sos' | 'find' | 'plan' | 'setup';
 
 async function getPosition(): Promise<{ lat?: number; lng?: number }> {
   try {
@@ -38,6 +40,22 @@ export default function Elder() {
 
   const load = () => user?.client_id && api(`/clients/${user.client_id}/summary`).then(setSummary).catch(() => {});
   useEffect(() => { load(); }, [user?.client_id]);
+  // ---- 家人用的隐藏设置：按住问候语 3 秒；第一次在长者手机启用后自动打开 ----
+  const [mode, setMode] = useState<{ isHome: boolean; keepAwake: boolean }>({ isHome: false, keepAwake: false });
+  const setupTimer = useRef<number | null>(null);
+  const refreshMode = () => { if (isNative) ElderMode.status().then(setMode).catch(() => {}); };
+  function startSetupHold() { if (!setupTimer.current) setupTimer.current = window.setTimeout(() => { setupTimer.current = null; refreshMode(); setSheet('setup'); }, 3000); }
+  function stopSetupHold() { if (setupTimer.current) { clearTimeout(setupTimer.current); setupTimer.current = null; } }
+  useEffect(() => {
+    let first = false; try { first = localStorage.getItem('anxin.elderSetup') === '1'; localStorage.removeItem('anxin.elderSetup'); } catch { /* ignore */ }
+    if (first) { refreshMode(); setSheet('setup'); }
+    if (!isNative) return;
+    // 返回键：只关闭弹出的画面，不会退出 App
+    const h = CapApp.addListener('backButton', () => setSheet(null));
+    const r = CapApp.addListener('resume', refreshMode);
+    return () => { h.then(x => x.remove()); r.then(x => x.remove()); };
+  }, []);
+
   useEffect(() => onEvent((ev, d) => {
     if (ev === 'alert' && d?.id === alertId) setAlertStatus(d.status);
     if (ev === 'alert' || ev === 'task') load();
@@ -75,9 +93,8 @@ export default function Elder() {
     <IonPage><IonContent fullscreen><div className="elder">
       <div className="lang-row">
         {LANGS.map(l => <Btn key={l.id} v={`sm ${lang === l.id ? '' : 'ghost'}`} onClick={() => setLang(l.id)}>{l.label}</Btn>)}
-        <Btn v="sm ghost" onClick={logout}>{t('logout')}</Btn>
       </div>
-      <div className="hello">{t('elderHello')}，{summary?.client?.name || user?.name}</div>
+      <div className="hello" onPointerDown={startSetupHold} onPointerUp={stopSetupHold} onPointerLeave={stopSetupHold} onContextMenu={e => e.preventDefault()}>{t('elderHello')}，{summary?.client?.name || user?.name}</div>
       {summary?.openAlerts?.length > 0 && sheet !== 'sos' && (
         <div style={{ padding: '0 1.2rem' }}><div className="alert-banner">🚨 {t('openAlert')} · {statusText[summary.openAlerts[0].status]}</div></div>
       )}
@@ -108,6 +125,22 @@ export default function Elder() {
           </div>
         </div>
       )}
+      {sheet === 'setup' && (
+        <div className="sheet">
+          <h2>{t('elderModeTitle')}</h2>
+          {isNative ? <div className="stack">
+            {mode.isHome && <div className="success">{t('isHomeYes')}</div>}
+            <Btn v={`block ${mode.isHome ? 'ghost' : ''}`} onClick={async () => { await ElderMode.setHomeApp({ on: !mode.isHome }); }}>{mode.isHome ? t('unsetHome') : t('setAsHome')}</Btn>
+            {!mode.isHome && <p className="small muted">{t('homeHint')}</p>}
+            <Btn v="block ghost" onClick={async () => { await ElderMode.setKeepAwake({ on: !mode.keepAwake }); refreshMode(); }}>{mode.keepAwake ? t('keepAwakeOff') : t('keepAwake')}</Btn>
+          </div> : <p className="muted">Android App</p>}
+          <div className="stack" style={{ marginTop: '1rem' }}>
+            <Btn v="block ghost" onClick={() => setSheet(null)}>{t('close')}</Btn>
+            <Btn v="block danger" onClick={() => { if (window.confirm(t('logout') + '?')) logout(); }}>{t('logout')}</Btn>
+          </div>
+          <p className="small muted" style={{ marginTop: '.8rem' }}>{t('holdToOpen')}</p>
+        </div>
+      )}
       {sheet === 'find' && (
         <div className="sheet">
           <h2>📞 {t('findSomeone')}</h2>
@@ -127,7 +160,7 @@ export default function Elder() {
             <div className="plan-item" key={x.id}><b>{fmtTime(x.scheduled_at).slice(11)} · {x.title}</b>{t('withWho')}：{x.assignee_name || x.partner_name || t('roleCoordinator')} {x.status === 'done' ? '✅' : ''}</div>
           ))}
           {summary?.upcoming?.length > 0 && <><h3 style={{ marginTop: '1rem' }}>{t('upcoming')}</h3>
-            {summary.upcoming.map((x: any) => <div className="plan-item" key={x.id}><b>{fmtTime(x.scheduled_at)}</b>{x.title}</div>)}</>}
+            {summary.upcoming.map((x: any) => <div className="plan-item" key={x.id}><b>{niceTime(x.scheduled_at)}</b>{x.title}</div>)}</>}
           <Btn v="block ghost" style={{ marginTop: '1rem' }} onClick={() => setSheet(null)}>{t('close')}</Btn>
         </div>
       )}

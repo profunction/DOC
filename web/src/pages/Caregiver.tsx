@@ -4,7 +4,7 @@ import { listOutline, checkmarkDoneOutline, callOutline, navigateOutline, medkit
 import { IonIcon } from '@ionic/react';
 import { useT } from '../i18n';
 import { useStore } from '../store';
-import { api, fmtTime, today } from '../api';
+import { api, fmtTime, today, niceTime } from '../api';
 import { Shell, useLoad, Badge, Empty, telLink, waLink, mapsLink, useErr, Btn } from '../components/ui';
 import { ReportForm } from './Coordinator';
 import { Chat } from './Family';
@@ -46,7 +46,7 @@ function Tasks() {
   }
   const Item = ({ x }: { x: any }) => (
     <div className="card">
-      <div className="row between"><b>{fmtTime(x.scheduled_at)} · {x.title}</b><Badge kind={x.status}>{t('s_' + x.status)}</Badge></div>
+      <div className="row between"><b>{niceTime(x.scheduled_at)} · {x.title}</b><Badge kind={x.status}>{t('s_' + x.status)}</Badge></div>
       <div>{x.client_name} <span className="small muted">· {x.address}</span></div>
       {x.notes && <div className="small muted"><IonIcon icon={pinOutline} /> {x.notes}</div>}
       <div className="row" style={{ marginTop: '.5rem' }}>
@@ -70,5 +70,5 @@ function Tasks() {
 function History() {
   const { t } = useT();
   const { data } = useLoad<any[]>('/tasks?mine=1&status=done');
-  return <div>{!data?.length && <Empty />}{data?.map(x => <div className="card" key={x.id}><div className="row between"><b>{x.title} · {x.client_name}</b><span className="small muted">{fmtTime(x.scheduled_at)}</span></div></div>)}</div>;
+  return <div>{!data?.length && <Empty />}{data?.map(x => <div className="card" key={x.id}><div className="row between"><b>{x.title} · {x.client_name}</b><span className="small muted">{niceTime(x.scheduled_at)}</span></div></div>)}</div>;
 }

@@ -1,7 +1,11 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { App as CapApp } from '@capacitor/app';
-import { IonApp } from '@ionic/react';
+import { IonApp, IonIcon } from '@ionic/react';
+import { useState } from 'react';
+import { fingerPrintOutline } from 'ionicons/icons';
+import { bio } from './native';
+import { useT } from './i18n';
 import { useStore } from './store';
 import { isNative } from './api';
 import Landing from './pages/Landing';
@@ -29,9 +33,39 @@ function Guard({ role, children }: { role: string; children: JSX.Element }) {
   return children;
 }
 
+/** 开了指纹 / 面容解锁的人：打开 App 或离开超过 5 分钟后回来，要先验证（长者手机不锁） */
+function BioGate({ children }: { children: JSX.Element }) {
+  const { user, logout } = useStore();
+  const { t } = useT();
+  const need = () => Boolean(user && user.role !== 'elder' && bio.enabled());
+  const [locked, setLocked] = useState(need());
+  const tryUnlock = async () => { if (await bio.verify(t('bioReason'), t('bioTitle'))) setLocked(false); };
+  useEffect(() => { setLocked(need()); }, [user?.id]);
+  useEffect(() => { if (locked) tryUnlock(); }, [locked]);
+  useEffect(() => {
+    if (!isNative) return;
+    let hiddenAt = 0;
+    const h = CapApp.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) hiddenAt = Date.now();
+      else if (hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000 && need()) setLocked(true);
+    });
+    return () => { h.then(x => x.remove()); };
+  }, [user?.id]);
+  if (!locked) return children;
+  return (
+    <div className="bio-lock">
+      <img src="/icon.svg" alt="" width={64} height={64} />
+      <h2>{t('bioLocked')}</h2>
+      <button className="bio-btn" onClick={tryUnlock}><IonIcon icon={fingerPrintOutline} /></button>
+      <p className="muted">{t('bioUnlock')}</p>
+      <a onClick={() => { bio.setEnabled(false); logout(); setLocked(false); }}>{t('usePassword')}</a>
+    </div>
+  );
+}
+
 function AppShell() {
   return (
-    <IonApp>
+    <IonApp><BioGate><>
       <Routes>
         <Route index element={<AppHome />} />
         <Route path="login" element={<Login />} />
@@ -45,7 +79,7 @@ function AppShell() {
         <Route path="caregiver" element={<Guard role="caregiver"><Caregiver /></Guard>} />
         <Route path="*" element={<Navigate to="/app" replace />} />
       </Routes>
-    </IonApp>
+    </></BioGate></IonApp>
   );
 }
 

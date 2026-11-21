@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode, type CSSProperties, type MouseEvent } from 'react';
-import { IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonIcon, IonLabel, IonPage, IonSegment, IonSegmentButton, IonTabBar, IonTabButton, IonTitle, IonToolbar } from '@ionic/react';
-import { logOutOutline, keyOutline } from 'ionicons/icons';
+import { IonActionSheet, IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonIcon, IonLabel, IonPage, IonSegment, IonSegmentButton, IonTabBar, IonTabButton, IonTitle, IonToggle, IonToolbar } from '@ionic/react';
+import { logOutOutline, keyOutline, personCircleOutline, ellipsisHorizontal, fingerPrintOutline, languageOutline } from 'ionicons/icons';
+import { bio } from '../native';
+import { isNative } from '../api';
 import { IonModal } from '@ionic/react';
 import { useT, LANGS, type Lang } from '../i18n';
 import { useStore } from '../store';
@@ -17,35 +19,68 @@ export function LangSelect({ light }: { light?: boolean }) {
 
 export interface Tab { id: string; label: string; icon: string }
 
-/** 应用外壳：Ionic 顶栏 + 分段标签 + 手机底部标签栏 */
+/** 应用外壳：顶栏只放标题和「我的」；电脑用顶部分段标签，手机用底部标签栏（超过 5 个时第 5 个是「更多」） */
 export function Shell({ title, tabs, tab, onTab, children, right }: { title: string; tabs: Tab[]; tab: string; onTab: (id: string) => void; children: ReactNode; right?: ReactNode }) {
-  const { logout, user } = useStore();
+  const { t } = useT();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const main = tabs.length > 5 ? tabs.slice(0, 4) : tabs;
+  const rest = tabs.length > 5 ? tabs.slice(4) : [];
+  const inRest = rest.some(x => x.id === tab);
   return (
     <IonPage>
       <IonHeader>
         <IonToolbar color="primary">
           <IonTitle>{title}</IonTitle>
-          <IonButtons slot="end">
-            <span className="topbar-user">{user?.name}</span>
-            {right}
-            <LangSelect light />
-            <ChangePasswordButton />
-            <IonButton onClick={logout} title="logout"><IonIcon slot="icon-only" icon={logOutOutline} /></IonButton>
-          </IonButtons>
+          <IonButtons slot="end">{right}<MeMenu /></IonButtons>
         </IonToolbar>
-        <IonToolbar className="sub" color="primary">
+        <IonToolbar className="sub desktop-only" color="primary">
           <IonSegment scrollable value={tab} onIonChange={e => e.detail.value && onTab(String(e.detail.value))}>
             {tabs.map(x => <IonSegmentButton key={x.id} value={x.id}><IonIcon icon={x.icon} /><IonLabel>{x.label}</IonLabel></IonSegmentButton>)}
           </IonSegment>
         </IonToolbar>
       </IonHeader>
-      <IonContent className="ion-padding">{children}</IonContent>
-      <IonFooter>
-        <IonTabBar selectedTab={tab}>
-          {tabs.slice(0, 5).map(x => <IonTabButton key={x.id} tab={x.id} selected={tab === x.id} onClick={() => onTab(x.id)}><IonIcon icon={x.icon} /><IonLabel>{x.label}</IonLabel></IonTabButton>)}
+      <IonContent className="ion-padding">
+        <h2 className="page-title mobile-only">{tabs.find(x => x.id === tab)?.label}</h2>
+        {children}
+      </IonContent>
+      <IonFooter className="mobile-only">
+        <IonTabBar selectedTab={inRest ? '__more' : tab}>
+          {main.map(x => <IonTabButton key={x.id} tab={x.id} selected={tab === x.id} onClick={() => onTab(x.id)}><IonIcon icon={x.icon} /><IonLabel>{x.label}</IonLabel></IonTabButton>)}
+          {rest.length > 0 && <IonTabButton tab="__more" selected={inRest} onClick={() => setMoreOpen(true)}><IonIcon icon={ellipsisHorizontal} /><IonLabel>{inRest ? tabs.find(x => x.id === tab)?.label : t('more')}</IonLabel></IonTabButton>}
         </IonTabBar>
       </IonFooter>
+      <IonActionSheet isOpen={moreOpen} onDidDismiss={() => setMoreOpen(false)} header={t('more')}
+        buttons={[...rest.map(x => ({ text: x.label, icon: x.icon, handler: () => onTab(x.id) })), { text: t('cancel'), role: 'cancel' as const }]} />
     </IonPage>
+  );
+}
+
+/** 「我的」：语言、修改密码、指纹 / 面容解锁、退出，全部收在一个按钮里 */
+export function MeMenu() {
+  const { t, lang, setLang } = useT();
+  const { user, logout } = useStore();
+  const [open, setOpen] = useState(false);
+  const [bioOn, setBioOn] = useState(bio.enabled());
+  const [bioOk, setBioOk] = useState(false);
+  useEffect(() => { if (open) bio.available().then(setBioOk); }, [open]);
+  async function toggleBio(on: boolean) {
+    if (on && !(await bio.verify(t('bioReason'), t('bioTitle')))) { setBioOn(false); return; }
+    bio.setEnabled(on); setBioOn(on);
+  }
+  return (
+    <>
+      <IonButton onClick={() => setOpen(true)} title={t('me')}><IonIcon slot="icon-only" icon={personCircleOutline} /></IonButton>
+      <IonModal isOpen={open} onDidDismiss={() => setOpen(false)} initialBreakpoint={0.6} breakpoints={[0, 0.6, 0.9]}>
+        <div className="ion-padding me-menu">
+          <div className="me-head"><IonIcon icon={personCircleOutline} /><div><b>{user?.name}</b><div className="small muted">{user?.phone}</div></div></div>
+          <div className="me-row"><IonIcon icon={languageOutline} /><span>{t('language')}</span>
+            <div className="row">{LANGS.map(l => <Btn key={l.id} v={`sm ${lang === l.id ? '' : 'ghost'}`} onClick={() => setLang(l.id)}>{l.label}</Btn>)}</div></div>
+          {isNative && bioOk && <div className="me-row"><IonIcon icon={fingerPrintOutline} /><span>{t('bioUnlock')}</span><IonToggle checked={bioOn} onIonChange={e => toggleBio(e.detail.checked)} /></div>}
+          <div className="me-row"><IonIcon icon={keyOutline} /><span>{t('changePassword')}</span><ChangePasswordButton light={false} /></div>
+          <Btn v="danger block" onClick={() => { setOpen(false); bio.setEnabled(false); logout(); }}><IonIcon slot="start" icon={logOutOutline} />{t('logout')}</Btn>
+        </div>
+      </IonModal>
+    </>
   );
 }
 

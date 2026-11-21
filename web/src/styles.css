@@ -242,3 +242,34 @@ ion-button + ion-button { margin-left: 0; }
 .unverified-banner b { color: var(--warn); }
 .unverified-banner p { margin: .3rem 0 .6rem; font-size: .92rem; }
 .form-sec { font-weight: 700; color: var(--brand); margin: 1rem 0 .5rem; padding-bottom: .3rem; border-bottom: 1px solid var(--line); }
+
+/* 手机 / 电脑导航 */
+.mobile-only { display: none; }
+@media (max-width: 899px) { .desktop-only { display: none !important; } .mobile-only { display: block; } ion-footer.mobile-only { display: block; } }
+@media (min-width: 900px) { ion-footer.mobile-only { display: none !important; } }
+.page-title { font-size: 1.3rem; margin: 0 0 .8rem; color: var(--brand); }
+/* 我的 */
+.me-menu { max-width: 520px; margin: 0 auto; }
+.me-head { display: flex; gap: .8rem; align-items: center; margin: .6rem 0 1rem; }
+.me-head ion-icon { font-size: 3rem; color: var(--brand); }
+.me-row { display: flex; align-items: center; gap: .7rem; padding: .8rem 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.me-row > ion-icon { font-size: 1.4rem; color: var(--brand); }
+.me-row > span { flex: 1; font-weight: 600; }
+.me-menu > ion-button { margin-top: 1.2rem; }
+/* 指纹锁 */
+.bio-lock { position: fixed; inset: 0; z-index: 9999; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .6rem; padding: 2rem; text-align: center; }
+.bio-btn { width: 96px; height: 96px; border-radius: 50%; border: 0; background: var(--brand); color: #fff; font-size: 3rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 24px rgba(11,94,85,.3); margin: 1rem 0 .2rem; }
+.bio-lock a { color: var(--brand); cursor: pointer; margin-top: 1rem; }
+
+/* 今天要处理 */
+.todo-row { display: flex; align-items: center; gap: .6rem; }
+.todo-row .grow { flex: 1; min-width: 0; }
+.todo-row .time { font-weight: 800; color: var(--brand); min-width: 3.2rem; }
+/* 点选 */
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .4rem; }
+.chips button { border: 1.5px solid var(--line); background: #fff; border-radius: 999px; padding: .5rem .9rem; font-size: .95rem; cursor: pointer; min-height: 40px; }
+.chips button.on { background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 700; }
+/* 长者手机二维码 */
+.qr-wrap { text-align: center; }
+.qr-wrap img { border-radius: 12px; border: 1px solid var(--line); background: #fff; padding: 6px; }
+.qr-wrap .code { font-size: 1.4rem; font-weight: 800; letter-spacing: .18em; color: var(--brand); margin: .4rem 0; }

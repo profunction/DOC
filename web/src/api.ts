@@ -103,3 +103,20 @@ export function compressImage(file: File, max = 1280, quality = 0.8): Promise<st
     img.src = url;
   });
 }
+
+/** 友好时间：今天 14:00 / 明天 09:30 / 11月24日 周一 14:00（三语） */
+export function niceTime(v?: string | null) {
+  if (!v) return '-';
+  const d = new Date(v.replace(' ', 'T'));
+  if (isNaN(d.getTime())) return fmtTime(v);
+  let lang = 'zh'; try { lang = localStorage.getItem('anxin.lang') || 'zh'; } catch { /* ignore */ }
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const day0 = new Date(); day0.setHours(0, 0, 0, 0);
+  const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - day0.getTime()) / 86400000);
+  const rel = { zh: ['昨天', '今天', '明天'], en: ['Yesterday', 'Today', 'Tomorrow'], ms: ['Semalam', 'Hari ini', 'Esok'] }[lang as 'zh'] || ['昨天', '今天', '明天'];
+  if (diff >= -1 && diff <= 1) return `${rel[diff + 1]} ${hm}`;
+  const wk = { zh: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'], en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], ms: ['Ahd', 'Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab'] }[lang as 'zh'] || [];
+  const md = lang === 'zh' ? `${d.getMonth() + 1}月${d.getDate()}日` : `${d.getDate()}/${d.getMonth() + 1}`;
+  const yr = d.getFullYear() !== new Date().getFullYear() ? (lang === 'zh' ? `${d.getFullYear()}年` : `/${d.getFullYear()}`) : '';
+  return lang === 'zh' ? `${yr}${md} ${wk[d.getDay()]} ${hm}` : `${wk[d.getDay()]} ${md}${yr} ${hm}`;
+}

@@ -3,12 +3,13 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { homeOutline, chatbubblesOutline, documentTextOutline, calendarOutline, alertCircleOutline, medkitOutline, cardOutline, peopleOutline } from 'ionicons/icons';
 import { IonPage, IonContent, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton } from '@ionic/react';
 import { checkmarkCircle, ellipseOutline, timeOutline, refreshOutline, logOutOutline } from 'ionicons/icons';
+import { ElderPhoneSetup } from '../components/ElderPhoneSetup';
 import { useT } from '../i18n';
 import { useStore } from '../store';
-import { api, fmtTime, photoUrl } from '../api';
+import { api, fmtTime, photoUrl, niceTime } from '../api';
 import { IonIcon } from '@ionic/react';
 import { callOutline, logoWhatsapp, locationOutline, happyOutline, waterOutline, thermometerOutline, pulseOutline, imagesOutline } from 'ionicons/icons';
-import { ChangePasswordButton, LangSelect, Shell, useLoad, Badge, Field, Empty, TASK_TYPES, telLink, waLink, mapsLink, localDT, useErr, Btn } from '../components/ui';
+import { MeMenu, Shell, useLoad, Badge, Field, Empty, TASK_TYPES, telLink, waLink, mapsLink, localDT, useErr, Btn } from '../components/ui';
 
 export default function Family() {
   const { t } = useT();
@@ -49,7 +50,7 @@ function Overview({ cid, hotline, go }: { cid: number; hotline: string; go: (t: 
     <div>
       {c.verified === 0 && <div className="unverified-banner"><b>{t('unverifiedTitle')}</b><p>{t('unverifiedText')}</p>
         <div className="row"><Btn v="ok sm" href={waLink(hotline)} target="_blank" rel="noreferrer"><IonIcon slot="start" icon={logoWhatsapp} />{t('contactNow')}</Btn><Btn v="ghost sm" onClick={() => go('profile')}>{t('editParent')}</Btn></div></div>}
-      {s.openAlerts?.length > 0 && <div className="alert-banner" onClick={() => go('alerts')}>🚨 {t('openAlert')}：{t('a_' + s.openAlerts[0].type)} · {t('as_' + s.openAlerts[0].status)} · {fmtTime(s.openAlerts[0].created_at)}</div>}
+      {s.openAlerts?.length > 0 && <div className="alert-banner" onClick={() => go('alerts')}>🚨 {t('openAlert')}：{t('a_' + s.openAlerts[0].type)} · {t('as_' + s.openAlerts[0].status)} · {niceTime(s.openAlerts[0].created_at)}</div>}
       <div className="card">
         <div className="row between"><h3>{c.name}</h3><Badge>{t('plan_' + c.plan)}</Badge></div>
         <p className="small muted">{c.address}</p>
@@ -63,14 +64,14 @@ function Overview({ cid, hotline, go }: { cid: number; hotline: string; go: (t: 
         <div className="card"><h3><IonIcon icon={calendarOutline} /> {t('today')}</h3>
           {!s.todayTasks.length && <Empty text={t('noPlanToday')} />}
           <div className="list">{s.todayTasks.map((x: any) => <div key={x.id} className="row between"><span>{fmtTime(x.scheduled_at).slice(11)} {x.title}<div className="small muted">{x.assignee_name || x.partner_name || ''}</div></span><Badge kind={x.status}>{t('s_' + x.status)}</Badge></div>)}</div>
-          {s.upcoming.length > 0 && <><h3 style={{ marginTop: '.8rem' }}>{t('upcoming')}</h3><div className="list">{s.upcoming.map((x: any) => <div key={x.id} className="small">{fmtTime(x.scheduled_at)} · {x.title}</div>)}</div></>}
+          {s.upcoming.length > 0 && <><h3 style={{ marginTop: '.8rem' }}>{t('upcoming')}</h3><div className="list">{s.upcoming.map((x: any) => <div key={x.id} className="small">{niceTime(x.scheduled_at)} · {x.title}</div>)}</div></>}
         </div>
         <div className="card"><h3><IonIcon icon={documentTextOutline} /> {t('lastReport')}</h3>
           {s.lastReport ? <ReportCard r={s.lastReport} compact /> : <Empty />}
           <Btn v="sm ghost" onClick={() => go('reports')}>{t('reports')} →</Btn>
         </div>
         <div className="card"><h3><IonIcon icon={alertCircleOutline} /> {t('lastAlert')}</h3>
-          {s.lastAlert ? <div><Badge kind={s.lastAlert.status}>{t('as_' + s.lastAlert.status)}</Badge> {t('a_' + s.lastAlert.type)} · {fmtTime(s.lastAlert.created_at)}<p className="small muted" style={{ marginTop: '.4rem' }}>{s.lastAlert.outcome}</p></div> : <Empty />}
+          {s.lastAlert ? <div><Badge kind={s.lastAlert.status}>{t('as_' + s.lastAlert.status)}</Badge> {t('a_' + s.lastAlert.type)} · {niceTime(s.lastAlert.created_at)}<p className="small muted" style={{ marginTop: '.4rem' }}>{s.lastAlert.outcome}</p></div> : <Empty />}
         </div>
         <div className="card stat"><div className="n">RM {s.dueAmount}</div><div className="l">{t('dueAmount')}</div><Btn v="sm ghost" onClick={() => go('payments')}>{t('payments')} →</Btn></div>
       </div>
@@ -82,7 +83,7 @@ export function ReportCard({ r, compact }: { r: any; compact?: boolean }) {
   const { t } = useT();
   return (
     <div>
-      <div className="row between"><b>{r.kind === 'consult' ? t('consult') : t('visit')} · {fmtTime(r.created_at)}</b><span className="small muted">{r.reporter_name}</span></div>
+      <div className="row between"><b>{r.kind === 'consult' ? t('consult') : t('visit')} · {niceTime(r.created_at)}</b><span className="small muted">{r.reporter_name}</span></div>
       <div className="row small vitals" style={{ marginTop: '.3rem' }}>
         <span><IonIcon icon={happyOutline} /> {r.mood || '-'}</span><span><IonIcon icon={pulseOutline} /> {t('bp')} {r.bp || '-'}</span><span><IonIcon icon={waterOutline} /> {t('glucose')} {r.glucose || '-'}</span><span><IonIcon icon={thermometerOutline} /> {r.temp || '-'}</span>
       </div>
@@ -108,7 +109,7 @@ export function AlertCard({ a, children }: { a: any; children?: any }) {
   return (
     <div className="card">
       <div className="row between"><b>{t('a_' + a.type)} · {a.client_name || ''}</b><Badge kind={a.status}>{t('as_' + a.status)}</Badge></div>
-      <div className="small muted">{fmtTime(a.created_at)} · {t('alertSource')}: {a.source} {a.severity && <>· <Badge kind={a.severity}>{t('severity' + a.severity[0].toUpperCase() + a.severity.slice(1))}</Badge></>}</div>
+      <div className="small muted">{niceTime(a.created_at)} · {t('alertSource')}: {a.source} {a.severity && <>· <Badge kind={a.severity}>{t('severity' + a.severity[0].toUpperCase() + a.severity.slice(1))}</Badge></>}</div>
       {a.lat && <a className="small" href={mapsLink(null, a.lat, a.lng)} target="_blank" rel="noreferrer">📍 {a.lat.toFixed(4)}, {a.lng.toFixed(4)}</a>}
       {a.description && <p className="small" style={{ marginTop: '.3rem' }}>{a.description}</p>}
       <ul className="timeline" style={{ marginTop: '.6rem' }}>{(a.steps || []).map((s: any, i: number) => <li key={i}><span className="muted">{fmtTime(s.at).slice(5)}</span> {s.by}：{s.action === 'created' ? t('a_' + a.type) : s.action}</li>)}</ul>
@@ -163,7 +164,7 @@ function Bookings({ cid }: { cid: number }) {
       </div>
       <div className="card"><h3>{t('myBookings')}</h3>
         {!data?.length && <Empty />}
-        <div className="list">{data?.map(x => <div key={x.id} className="row between"><span><b>{x.title}</b><div className="small muted">{fmtTime(x.scheduled_at)} · {x.assignee_name || x.partner_name || ''} {x.fee ? `· RM${x.fee}` : ''}</div></span>
+        <div className="list">{data?.map(x => <div key={x.id} className="row between"><span><b>{x.title}</b><div className="small muted">{niceTime(x.scheduled_at)} · {x.assignee_name || x.partner_name || ''} {x.fee ? `· RM${x.fee}` : ''}</div></span>
           <span className="row"><Badge kind={x.status}>{t('s_' + x.status)}</Badge>{['requested', 'assigned'].includes(x.status) && <Btn v="ghost sm" onClick={() => cancelT(x.id)}>{t('cancelBooking')}</Btn>}</span></div>)}</div>
       </div>
     </div>
@@ -183,7 +184,7 @@ export function Chat({ cid }: { cid: number }) {
   return (
     <div className="chat">
       <div className="msgs" ref={box}>
-        {msgs.map(m => <div key={m.id} className={`msg ${m.kind === 'system' ? 'system' : m.sender_id === user?.id ? 'mine' : ''}`}><div className="who">{m.kind === 'system' ? t('system') : m.sender_name} · {fmtTime(m.created_at)}</div>{m.text}</div>)}
+        {msgs.map(m => <div key={m.id} className={`msg ${m.kind === 'system' ? 'system' : m.sender_id === user?.id ? 'mine' : ''}`}><div className="who">{m.kind === 'system' ? t('system') : m.sender_name} · {niceTime(m.created_at)}</div>{m.text}</div>)}
       </div>
       <form onSubmit={send}><input value={text} onChange={e => setText(e.target.value)} placeholder={t('typeMessage')} /><Btn v="">{t('sendMessage')}</Btn></form>
     </div>
@@ -197,12 +198,13 @@ function Profile({ cid }: { cid: number }) {
   if (!c) return <p className="muted">{t('loading')}</p>;
   if (edit) return <ParentEdit c={c} onDone={() => { setEdit(false); reload(); }} />;
   const h = c.health || {};
-  const rows: [string, any][] = [[t('conditions'), h.conditions], [t('meds'), h.meds], [t('allergies'), h.allergies], [t('doctor'), h.doctor], [t('mobility'), h.mobility], [t('langDiet'), [h.language, h.diet].filter(Boolean).join(' / ')], [t('healthNotes'), h.notes], [t('emergencyContact'), c.emergency_contact], [t('preferredHospital'), c.preferred_hospital], [t('watch'), c.watch_id], [t('plan'), `${t('plan_' + c.plan)} · RM${c.monthly_fee}/${t('perMonth').split(' ')[0] === 'RM' ? 'month' : '月'}`], [t('consent'), c.consent_at ? `✅ ${fmtTime(c.consent_at)}` : '—']];
+  const rows: [string, any][] = [[t('conditions'), h.conditions], [t('meds'), h.meds], [t('allergies'), h.allergies], [t('doctor'), h.doctor], [t('mobility'), h.mobility], [t('langDiet'), [h.language, h.diet].filter(Boolean).join(' / ')], [t('healthNotes'), h.notes], [t('emergencyContact'), c.emergency_contact], [t('preferredHospital'), c.preferred_hospital], [t('watch'), c.watch_id], [t('plan'), `${t('plan_' + c.plan)} · RM${c.monthly_fee}/${t('perMonth').split(' ')[0] === 'RM' ? 'month' : '月'}`], [t('consent'), c.consent_at ? `✅ ${niceTime(c.consent_at)}` : '—']];
   return (
     <div>
       <div className="card"><div className="row between"><h3>{c.name} · {c.gender || ''} · {c.birth_year || ''}</h3>{c.verified === 0 && <Btn v="ghost sm" onClick={() => setEdit(true)}>{t('editParent')}</Btn>}</div><p className="small muted">{c.address}</p>
         <table className="tbl"><tbody>{rows.map(([k, v]) => <tr key={k}><th style={{ width: '38%' }}>{k}</th><td>{v || '-'}</td></tr>)}</tbody></table>
       </div>
+      <ElderPhoneSetup clientId={cid} />
       <div className="card"><h3><IonIcon icon={peopleOutline} /> {t('familyMembers')}</h3><div className="list">{c.family?.map((f: any) => <div key={f.id} className="row between"><span>{f.name} <span className="muted small">{f.relation}</span></span><a className="small" href={telLink(f.phone)}>{f.phone}</a></div>)}</div></div>
     </div>
   );
@@ -243,14 +245,14 @@ export function Team({ showPrice }: { showPrice?: boolean }) {
 /** 自己注册、但协调员还没关联到长者时显示 */
 function Pending() {
   const { t } = useT();
-  const { user, hotline, refreshMe, logout } = useStore();
+  const { user, hotline, refreshMe } = useStore();
   const [busy, setBusy] = useState(false);
   useEffect(() => { const id = setInterval(() => { refreshMe(); }, 30000); return () => clearInterval(id); }, [refreshMe]);
   const msg = t('pendingWa').replace('{name}', user?.name || '').replace('{phone}', user?.phone || '');
   return (
     <IonPage>
       <IonHeader><IonToolbar color="primary"><IonTitle>{t('appName')}</IonTitle>
-        <IonButtons slot="end"><LangSelect light /><ChangePasswordButton /><IonButton onClick={logout}><IonIcon slot="icon-only" icon={logOutOutline} /></IonButton></IonButtons>
+        <IonButtons slot="end"><MeMenu /></IonButtons>
       </IonToolbar></IonHeader>
       <IonContent className="ion-padding">
         <div className="main" style={{ maxWidth: 560 }}>

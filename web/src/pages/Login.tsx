@@ -5,6 +5,7 @@ import { useT } from '../i18n';
 import { useStore } from '../store';
 import { getApiBase, setApiBase, isNative, pingServer, ApiError, api } from '../api';
 import { LangSelect, useErr, Btn } from '../components/ui';
+import { bio } from '../native';
 
 const DEMO = [
   { role: 'roleElder', phone: '0100000011' }, { role: 'roleFamily', phone: '0100000012' },
@@ -33,6 +34,13 @@ export default function Login({ initialMode }: { initialMode?: 'login' | 'regist
   useEffect(() => { if (getApiBase() || !isNative) api<{ demo?: boolean }>('/public/info', { auth: false }).then(r => setDemo(Boolean(r.demo))).catch(() => {}); }, []);
   const { Err, show, setErr } = useErr();
 
+  /** 第一次在手机上用密码登录后，问要不要改用指纹 / 面容 */
+  async function offerBio(role: string) {
+    if (!isNative || role === 'elder' || bio.enabled() || bio.asked()) return;
+    bio.markAsked();
+    if (!(await bio.available())) return;
+    if (window.confirm(t('bioAsk')) && (await bio.verify(t('bioReason'), t('bioTitle')))) bio.setEnabled(true);
+  }
   async function testServer() {
     setErr(''); setPing(''); setBusy(true);
     try { const hot = await pingServer(server); setApiBase(server); setPing(`${t('serverOk')} · ${t('hotline')} +${hot}`); } catch (err) { show(err); } finally { setBusy(false); }
@@ -42,7 +50,8 @@ export default function Login({ initialMode }: { initialMode?: 'login' | 'regist
     try {
       if (showServer) setApiBase(server);
       if (isNative && !getApiBase()) throw new ApiError(0, showServer ? 'no_server' : 'not_configured');
-      await login(phone.trim(), password);
+      const u = await login(phone.trim(), password);
+      await offerBio(u.role);
       nav('/app', { replace: true });
     } catch (err) { show(err); } finally { setBusy(false); }
   }
@@ -71,6 +80,16 @@ export default function Login({ initialMode }: { initialMode?: 'login' | 'regist
     try { setInv(await api(`/public/invite/${encodeURIComponent(code.trim())}`, { auth: false })); } catch (err) { show(err); } finally { setBusy(false); }
   }
   useEffect(() => { if (params.code) checkCode(); }, [params.code]);
+  /** 长者手机：不用密码，启用后永远保持登录，并自动打开「长者手机设置」 */
+  async function activateElder() {
+    setErr(''); setBusy(true);
+    try {
+      const r = await api(`/public/invite/${encodeURIComponent(code.trim())}`, { body: { device: true }, auth: false });
+      try { localStorage.setItem('anxin.elderSetup', '1'); } catch { /* ignore */ }
+      await setSession(r.token);
+      nav('/app', { replace: true });
+    } catch (err) { show(err); } finally { setBusy(false); }
+  }
   async function activate(e: FormEvent) {
     e.preventDefault(); setErr('');
     if (pw1 !== pw2) { setErr(t('passwordMismatch')); return; }
@@ -123,12 +142,17 @@ export default function Login({ initialMode }: { initialMode?: 'login' | 'regist
               <div className="field"><label>{t('inviteCode')}</label><input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="ABCD-EFGH-JK" autoCapitalize="characters" required style={{ letterSpacing: '.15em', fontWeight: 700 }} /></div>
               <Btn v="block" disabled={busy}>{busy ? t('loading') : t('checkCode')}</Btn>
             </form></> : <>
+            {inv.role === 'elder' ? <>
+              <div className="success"><b>{inv.name}</b></div>
+              <p className="small muted">{t('elderActivateHint')}</p>
+              <Btn v="block" disabled={busy} onClick={activateElder}>{busy ? t('loading') : t('elderActivate')}</Btn>
+            </> : <>
             <div className="success">{t('activateFor')}：<b>{inv.name}</b> · {inv.phone}</div>
             <form onSubmit={activate}>
               <div className="field"><label>{t('newPassword')}</label><input type="password" autoComplete="new-password" minLength={6} value={pw1} onChange={e => setPw1(e.target.value)} required /></div>
               <div className="field"><label>{t('confirmPassword')}</label><input type="password" autoComplete="new-password" minLength={6} value={pw2} onChange={e => setPw2(e.target.value)} required /></div>
               <Btn v="block" disabled={busy}>{busy ? t('loading') : t('activate')}</Btn>
-            </form></>}
+            </form></>}</>}
           <p className="login-links"><a onClick={() => { go('login'); setInv(null); }}>← {t('backToLogin')}</a></p>
         </>}
 

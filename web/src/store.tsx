@@ -34,6 +34,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       const me = await api('/me');
       setUser(me.user); setClientIds(me.client_ids); setHotline(me.hotline);
+      if (me.token) setToken(me.token);   // 每次打开 App 自动续期
     } catch { setUser(null); }
     setReady(true);
   }, []);

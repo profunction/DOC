@@ -3,14 +3,17 @@ import { db, nowIso } from './db.js';
 import { broadcastClient } from './events.js';
 
 // ---------- ntfy：协调员手机装开源 ntfy App，订阅 NTFY_TOPIC 即可收到警报，App 关着也能收 ----------
-const NTFY_URL = (process.env.NTFY_URL || '').replace(/\/$/, '');     // 例如 https://ntfy.sh 或自托管 https://ntfy.example.com
-const NTFY_TOPIC = process.env.NTFY_TOPIC || '';                        // 例如 anxin-alerts-xxxx（当成密码，越长越好）
-const NTFY_TOKEN = process.env.NTFY_TOKEN || '';                        // 自托管开了鉴权时填
+import { getSetting } from './settings.js';
 
+// 设置来源：协调员在 App「设置」里填（存数据库），没填时用环境变量 NTFY_URL / NTFY_TOPIC / NTFY_TOKEN
 export async function pushNtfy({ title, message, priority = 'high', tags = ['rotating_light'], click }) {
+  const NTFY_URL = getSetting('ntfy_url').replace(/\/$/, '');
+  const NTFY_TOPIC = getSetting('ntfy_topic');
+  const NTFY_TOKEN = getSetting('ntfy_token');
   if (!NTFY_URL || !NTFY_TOPIC) return false;
   try {
-    const headers = { Title: title, Priority: priority, Tags: tags.join(',') };
+    // HTTP 头只能放 ASCII，标题用 RFC 2047 编码，中文才不会乱码
+    const headers = { Title: `=?UTF-8?B?${Buffer.from(title).toString('base64')}?=`, Priority: priority, Tags: tags.join(',') };
     if (click) headers.Click = click;
     if (NTFY_TOKEN) headers.Authorization = `Bearer ${NTFY_TOKEN}`;
     const r = await fetch(`${NTFY_URL}/${NTFY_TOPIC}`, { method: 'POST', headers, body: message });
@@ -49,5 +52,5 @@ export function traccarHandler(req, res) {
 }
 
 export function integrationStatus() {
-  return { ntfy: Boolean(NTFY_URL && NTFY_TOPIC), traccar: Boolean(TRACCAR_KEY) };
+  return { ntfy: Boolean(getSetting('ntfy_url') && getSetting('ntfy_topic')), traccar: Boolean(TRACCAR_KEY) };
 }

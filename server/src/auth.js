@@ -4,7 +4,8 @@ import { db } from './db.js';
 export const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-change-me';
 
 export function sign(user) {
-  return jwt.sign({ uid: user.id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
+  // 长者手机设定好后永远不用再登录；其他人 60 天，每次打开 App（/api/me）自动续期
+  return jwt.sign({ uid: user.id, role: user.role }, JWT_SECRET, { expiresIn: user.role === 'elder' ? '3650d' : '60d' });
 }
 
 export function verifyToken(token) {

@@ -39,7 +39,8 @@ export function findInvite(code) {
 export function useInvite(code, password) {
   const inv = findInvite(code);
   if (!inv) return null;
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(password, 10), inv.user_id);
+  // password 为 null 表示长者设备启用：不设密码，用长期 token 保持登录
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(password ? bcrypt.hashSync(password, 10) : unusablePasswordHash(), inv.user_id);
   db.prepare(`UPDATE invites SET used_at = datetime('now') WHERE code_hash = ?`).run(inv.code_hash);
   audit(inv.user_id, 'activate_account', `user:${inv.user_id}`);
   return db.prepare('SELECT * FROM users WHERE id = ?').get(inv.user_id);
