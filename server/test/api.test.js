@@ -145,3 +145,24 @@ test('app service application is stored with its source', async () => {
   const e = (await j('/enquiries', {}, coord)).data.find(x => x.phone === '0188880000');
   assert.equal(e.source, 'app'); assert.equal(e.status, 'new');
 });
+
+test('self registration: logs in at once but sees nothing until the coordinator links them', async () => {
+  const bad = await j('/public/register', { body: { name: 'X', phone: '12', password: 'secret88' } });
+  assert.equal(bad.status, 400);
+  const r = (await j('/public/register', { body: { name: '自助注册者', phone: '0199990001', password: 'secret88', parent_name: '张伯伯', city: '古来', message: '爸爸 80 岁' } })).data;
+  assert.ok(r.token); assert.equal(r.user.role, 'family');
+  assert.equal((await j('/public/register', { body: { name: '重复', phone: '0199990001', password: 'secret88' } })).data.error, 'phone_exists');
+  const me = (await j('/me', {}, r.token)).data;
+  assert.deepEqual(me.client_ids, []);
+  assert.deepEqual((await j('/clients', {}, r.token)).data, []);
+  assert.equal((await j('/clients/1', {}, r.token)).status, 403);
+  assert.equal((await j('/alerts', { body: { client_id: 1, type: 'sos' } }, r.token)).status, 403);
+  const coord = await login('0100000001');
+  const e = (await j('/enquiries', {}, coord)).data.find(x => x.phone === '0199990001');
+  assert.equal(e.source, 'register'); assert.ok(e.user_id); assert.match(e.message, /张伯伯/);
+  assert.equal((await j('/clients/2/family', { body: { user_id: e.user_id, relation: '女儿' } }, coord)).status, 200);
+  assert.deepEqual((await j('/me', {}, r.token)).data.client_ids, [2]);
+  assert.equal((await j('/clients/2', {}, r.token)).status, 200);
+  assert.equal((await j('/enquiries', {}, coord)).data.find(x => x.phone === '0199990001').status, 'done');
+  assert.ok((await j('/messages?client_id=2', {}, r.token)).data.some(m => m.text.includes('已加入')));
+});

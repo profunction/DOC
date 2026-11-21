@@ -457,16 +457,34 @@ function Users() {
   );
 }
 
+function LinkRegistered({ e, clients, onDone }: { e: any; clients: any[]; onDone: () => void }) {
+  const { t } = useT();
+  const [cid, setCid] = useState(''); const [rel, setRel] = useState('');
+  const { Err, show } = useErr();
+  async function link() { if (!cid) return; try { await api(`/clients/${cid}/family`, { body: { user_id: e.user_id, relation: rel } }); onDone(); } catch (err) { show(err); } }
+  return (
+    <div style={{ marginTop: '.4rem' }}>{Err}
+      <div className="row small">
+        <select value={cid} onChange={x => setCid(x.target.value)}><option value="">{t('client')} —</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        <input placeholder={t('relation')} value={rel} onChange={x => setRel(x.target.value)} style={{ padding: '.4rem', border: '1px solid var(--line)', borderRadius: 8, width: 110 }} />
+        <Btn v="sm" onClick={link} disabled={!cid}>{t('linkToClient')}</Btn>
+      </div>
+    </div>
+  );
+}
+
 function Enquiries() {
   const { t } = useT();
   const { data, reload } = useLoad<any[]>('/enquiries');
+  const { data: clients } = useLoad<any[]>('/clients');
   const { data: audit } = useLoad<any[]>('/audit');
   return (
     <div>
       <div className="card"><h3>{t('enquiries')}</h3>{!data?.length && <Empty />}<div className="list">{data?.map(e => <div key={e.id} style={e.status === 'done' ? { opacity: .55 } : undefined}>
-        <div className="row between"><b>{e.name} · <a href={waLink(e.phone)} target="_blank" rel="noreferrer">{e.phone}</a></b><span className="row small muted"><Badge kind={e.status === 'done' ? 'done' : 'new'}>{e.status === 'done' ? t('handled') : t('as_new')}</Badge><Badge kind="gray">{e.source === 'app' ? 'App' : 'Web'}</Badge>{fmtTime(e.created_at)}</span></div>
+        <div className="row between"><b>{e.name} · <a href={waLink(e.phone)} target="_blank" rel="noreferrer">{e.phone}</a></b><span className="row small muted"><Badge kind={e.status === 'done' ? 'done' : 'new'}>{e.status === 'done' ? t('handled') : t('pendingBadge')}</Badge><Badge kind={e.source === 'register' ? '' : 'gray'}>{e.source === 'register' ? t('registeredBadge') : e.source === 'app' ? 'App' : 'Web'}</Badge>{fmtTime(e.created_at)}</span></div>
         <div className="small">{e.city} · {e.message}</div>
-        {e.status !== 'done' && <Btn v="ghost sm" onClick={async () => { await api(`/enquiries/${e.id}`, { method: 'PATCH', body: { status: 'done' } }); reload(); }}>{t('markHandled')}</Btn>}
+        {e.status !== 'done' && e.user_id && <LinkRegistered e={e} clients={clients || []} onDone={reload} />}
+        {e.status !== 'done' && !e.user_id && <Btn v="ghost sm" onClick={async () => { await api(`/enquiries/${e.id}`, { method: 'PATCH', body: { status: 'done' } }); reload(); }}>{t('markHandled')}</Btn>}
       </div>)}</div></div>
       <div className="card"><h3>{t('audit')}</h3><div className="tbl-wrap"><table className="tbl"><tbody>{audit?.slice(0, 50).map(a => <tr key={a.id}><td className="small muted">{fmtTime(a.at)}</td><td>{a.user_name}</td><td>{a.action}</td><td>{a.target}</td></tr>)}</tbody></table></div></div>
     </div>

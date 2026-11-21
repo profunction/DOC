@@ -69,7 +69,7 @@ export function subscribeEvents(handler: Handler): () => void {
   const open = () => {
     if (closed) return;
     es = new EventSource(`${getApiBase()}/api/events?token=${encodeURIComponent(tok)}`);
-    for (const ev of ['alert', 'task', 'report', 'message']) {
+    for (const ev of ['alert', 'task', 'report', 'message', 'linked']) {
       es.addEventListener(ev, (e: MessageEvent) => { try { handler(ev, JSON.parse(e.data)); } catch { /* ignore */ } });
     }
     es.onopen = () => { retry = 2000; };

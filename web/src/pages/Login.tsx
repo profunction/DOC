@@ -11,12 +11,12 @@ const DEMO = [
   { role: 'roleCoordinator', phone: '0100000001' }, { role: 'roleCaregiver', phone: '0100000002' },
 ];
 
-export default function Login({ initialMode }: { initialMode?: 'login' | 'apply' | 'activate' }) {
+export default function Login({ initialMode }: { initialMode?: 'login' | 'register' | 'activate' }) {
   const { t, lang } = useT();
   const { login, setSession } = useStore();
   const nav = useNavigate();
   const params = useParams();
-  const [mode, setMode] = useState<'login' | 'apply' | 'activate'>(initialMode || (params.code ? 'activate' : 'login'));
+  const [mode, setMode] = useState<'login' | 'register' | 'activate'>(initialMode || (params.code ? 'activate' : 'login'));
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [server, setServer] = useState(getApiBase());
@@ -47,14 +47,19 @@ export default function Login({ initialMode }: { initialMode?: 'login' | 'apply'
     } catch (err) { show(err); } finally { setBusy(false); }
   }
 
-  // ---- 申请服务 ----
-  const [ap, setAp] = useState({ name: '', phone: '', city: '', message: '' });
-  const [applied, setApplied] = useState(false);
-  async function apply(e: FormEvent) {
-    e.preventDefault(); setErr(''); setBusy(true);
+  // ---- 自己注册（子女 / 家属账号）----
+  const [rg, setRg] = useState({ name: '', phone: '', password: '', password2: '', parent_name: '', city: '', message: '', agree: false });
+  async function register(e: FormEvent) {
+    e.preventDefault(); setErr('');
+    if (rg.password !== rg.password2) { setErr(t('passwordMismatch')); return; }
+    if (!rg.agree) { setErr(t('mustAgree')); return; }
+    setBusy(true);
     try {
       if (isNative && !getApiBase()) throw new ApiError(0, 'not_configured');
-      await api('/public/enquiry', { body: { ...ap, lang, source: 'app' }, auth: false }); setApplied(true);
+      const { password2, agree, ...body } = rg;
+      const r = await api('/public/register', { body: { ...body, lang }, auth: false });
+      await setSession(r.token);
+      nav('/app', { replace: true });
     } catch (err) { show(err); } finally { setBusy(false); }
   }
   // ---- 启用账号 ----
@@ -76,7 +81,7 @@ export default function Login({ initialMode }: { initialMode?: 'login' | 'apply'
       nav('/app', { replace: true });
     } catch (err) { show(err); } finally { setBusy(false); }
   }
-  const go = (m: 'login' | 'apply' | 'activate') => { setErr(''); setMode(m); };
+  const go = (m: 'login' | 'register' | 'activate') => { setErr(''); setMode(m); };
 
   return (
     <IonPage><IonContent><div style={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
@@ -85,18 +90,21 @@ export default function Login({ initialMode }: { initialMode?: 'login' | 'apply'
           <div className="row" onClick={tapLogo} style={{ cursor: 'default' }}><img src="/icon.svg" alt="" width={36} height={36} /><div><b>{t('appName')}</b><div className="small muted">{t('tagline')}</div></div></div>
           <LangSelect />
         </div>
-        {mode === 'apply' && <>
-          <h2>{t('applyTitle')}</h2>
+        {mode === 'register' && <>
+          <h2>{t('registerTitle')}</h2>
+          <p className="small muted">{t('registerIntro')}</p>
           {Err}
-          {applied ? <div className="success">{t('applySent')}</div> : <>
-            <p className="small muted">{t('applyIntro')}</p>
-            <form onSubmit={apply}>
-              <div className="field"><label>{t('yourName')}</label><input value={ap.name} onChange={e => setAp({ ...ap, name: e.target.value })} required maxLength={80} /></div>
-              <div className="field"><label>{t('yourPhone')}</label><input inputMode="tel" value={ap.phone} onChange={e => setAp({ ...ap, phone: e.target.value })} required maxLength={30} /></div>
-              <div className="field"><label>{t('parentArea')}</label><input value={ap.city} onChange={e => setAp({ ...ap, city: e.target.value })} placeholder="新山市区 / 士古来 / 古来 …" /></div>
-              <div className="field"><label>{t('yourMessage')}</label><textarea value={ap.message} onChange={e => setAp({ ...ap, message: e.target.value })} maxLength={1000} /></div>
-              <Btn v="block" disabled={busy}>{busy ? t('loading') : t('submit')}</Btn>
-            </form></>}
+          <form onSubmit={register}>
+            <div className="field"><label>{t('yourName')}</label><input value={rg.name} onChange={e => setRg({ ...rg, name: e.target.value })} required maxLength={80} autoComplete="name" /></div>
+            <div className="field"><label>{t('yourPhone')}</label><input inputMode="tel" value={rg.phone} onChange={e => setRg({ ...rg, phone: e.target.value })} required maxLength={20} autoComplete="tel" placeholder="0123456789" /></div>
+            <div className="field"><label>{t('newPassword')}</label><input type="password" autoComplete="new-password" minLength={6} value={rg.password} onChange={e => setRg({ ...rg, password: e.target.value })} required /></div>
+            <div className="field"><label>{t('confirmPassword')}</label><input type="password" autoComplete="new-password" minLength={6} value={rg.password2} onChange={e => setRg({ ...rg, password2: e.target.value })} required /></div>
+            <div className="field"><label>{t('parentName')}</label><input value={rg.parent_name} onChange={e => setRg({ ...rg, parent_name: e.target.value })} maxLength={80} /></div>
+            <div className="field"><label>{t('parentArea')}</label><input value={rg.city} onChange={e => setRg({ ...rg, city: e.target.value })} placeholder="新山市区 / 士古来 / 古来 …" maxLength={80} /></div>
+            <div className="field"><label>{t('yourMessage')}</label><textarea value={rg.message} onChange={e => setRg({ ...rg, message: e.target.value })} maxLength={1000} /></div>
+            <label className="row small" style={{ marginBottom: '.8rem', flexWrap: 'nowrap', alignItems: 'flex-start' }}><input type="checkbox" checked={rg.agree} onChange={e => setRg({ ...rg, agree: e.target.checked })} style={{ marginTop: '.2rem' }} /><span>{t('agreeTerms')} <a href="/legal" target="_blank" rel="noreferrer">{t('terms')}</a></span></label>
+            <Btn v="block" disabled={busy}>{busy ? t('loading') : t('register')}</Btn>
+          </form>
           <p className="login-links"><a onClick={() => go('login')}>← {t('backToLogin')}</a></p>
         </>}
 
@@ -132,7 +140,7 @@ export default function Login({ initialMode }: { initialMode?: 'login' | 'apply'
           <Btn v="block" disabled={busy}>{busy ? t('loading') : t('login')}</Btn>
         </form>
         <div className="login-actions">
-          <Btn v="secondary block" onClick={() => go('apply')}>{t('applyService')}</Btn>
+          <Btn v="secondary block" onClick={() => go('register')}>{t('register')}</Btn>
           <Btn v="ghost block" onClick={() => go('activate')}>{t('haveCode')}</Btn>
         </div>
         {!isNative && <p className="small muted" style={{ marginTop: '.8rem' }}><Link to="/">← {t('tagline')}</Link></p>}

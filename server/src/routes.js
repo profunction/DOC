@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { db, encrypt, decrypt, audit, nowIso } from './db.js';
 import { sign, requireAuth, requireRole, clientIdsFor, canSeeClient } from './auth.js';
-import { subscribe, broadcastClient } from './events.js';
+import { subscribe, broadcastClient, broadcastUser } from './events.js';
 import { pushNtfy, traccarHandler, integrationStatus } from './integrations.js';
 import { uploads } from './uploads.js';
 import { createInvite, findInvite, useInvite, unusablePasswordHash, maskPhone, rateLimit, failures } from './accounts.js';
@@ -15,6 +15,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS enquiries (
   created_at TEXT NOT NULL DEFAULT (datetime('now')))`);
 try { db.exec(`ALTER TABLE enquiries ADD COLUMN source TEXT`); } catch { /* 已存在 */ }
 try { db.exec(`ALTER TABLE enquiries ADD COLUMN status TEXT NOT NULL DEFAULT 'new'`); } catch { /* 已存在 */ }
+try { db.exec(`ALTER TABLE enquiries ADD COLUMN user_id INTEGER`); } catch { /* 已存在 */ }
 
 const HOTLINE = process.env.HOTLINE_PHONE || '60123456789';
 
@@ -59,6 +60,26 @@ pub.post('/enquiry', rateLimit('enquiry', 10), (req, res) => {
   db.prepare('INSERT INTO enquiries (name, phone, city, message, lang, source) VALUES (?,?,?,?,?,?)').run(String(name).slice(0, 80), String(phone).slice(0, 30), city ? String(city).slice(0, 80) : null, message ? String(message).slice(0, 1000) : null, lang || 'zh', source === 'app' ? 'app' : 'web');
   pushNtfy({ title: `📥 新的服务申请：${name}`, message: `${phone}${city ? ' · ' + city : ''}${message ? '\n' + message : ''}`, priority: 'default', tags: ['inbox_tray'] });
   res.json({ ok: true });
+});
+
+// 顾客自己注册：只能注册"子女 / 家属"账号；注册后立即可登录，但在协调员关联到长者之前看不到任何长者资料
+pub.post('/register', rateLimit('register', 5), (req, res) => {
+  const b = req.body || {};
+  const name = String(b.name || '').trim().slice(0, 80);
+  const phone = String(b.phone || '').replace(/[^0-9+]/g, '');
+  const pw = String(b.password || '');
+  if (!name || !phone) return res.status(400).json({ error: 'name_phone_required' });
+  if (!/^\+?[0-9]{9,15}$/.test(phone)) return res.status(400).json({ error: 'bad_phone' });
+  if (pw.length < 6) return res.status(400).json({ error: 'password_too_short' });
+  if (db.prepare('SELECT id FROM users WHERE phone = ?').get(phone)) return res.status(400).json({ error: 'phone_exists' });
+  const r = db.prepare('INSERT INTO users (phone, password_hash, name, role, lang) VALUES (?,?,?,?,?)').run(phone, bcrypt.hashSync(pw, 10), name, 'family', ['zh', 'en', 'ms'].includes(b.lang) ? b.lang : 'zh');
+  const parent = String(b.parent_name || '').trim().slice(0, 80);
+  const msg = [parent ? `父母：${parent}` : '', String(b.message || '').slice(0, 1000)].filter(Boolean).join('\n');
+  db.prepare('INSERT INTO enquiries (name, phone, city, message, lang, source, user_id) VALUES (?,?,?,?,?,?,?)').run(name, phone, b.city ? String(b.city).slice(0, 80) : null, msg || null, b.lang || 'zh', 'register', r.lastInsertRowid);
+  audit(r.lastInsertRowid, 'self_register', `user:${r.lastInsertRowid}`);
+  pushNtfy({ title: `🆕 新注册：${name}`, message: `${phone}${b.city ? ' · ' + b.city : ''}${parent ? '\n父母：' + parent : ''}\n请核实后在「网站咨询」关联到长者`, priority: 'default', tags: ['new'] });
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(r.lastInsertRowid);
+  res.json({ token: sign(u), user: safeUser(u) });
 });
 
 // 顾客用启用码设密码
@@ -416,9 +437,20 @@ api.patch('/enquiries/:id', requireRole('coordinator'), (req, res) => {
   res.json({ ok: true });
 });
 api.post('/clients/:id/family', requireRole('coordinator'), (req, res) => {
-  const u = db.prepare(`SELECT id FROM users WHERE phone = ? AND role = 'family'`).get(String(req.body?.phone || '').trim());
+  const clientId = Number(req.params.id);
+  const client = db.prepare('SELECT id, name FROM clients WHERE id = ?').get(clientId);
+  if (!client) return res.status(404).json({ error: 'not_found' });
+  const u = req.body?.user_id
+    ? db.prepare(`SELECT id, name FROM users WHERE id = ? AND role = 'family'`).get(Number(req.body.user_id))
+    : db.prepare(`SELECT id, name FROM users WHERE phone = ? AND role = 'family'`).get(String(req.body?.phone || '').trim());
   if (!u) return res.status(404).json({ error: 'user_not_found' });
-  db.prepare('INSERT OR IGNORE INTO family_links (user_id, client_id, relation) VALUES (?,?,?)').run(u.id, Number(req.params.id), req.body?.relation || null);
+  const r = db.prepare('INSERT OR IGNORE INTO family_links (user_id, client_id, relation) VALUES (?,?,?)').run(u.id, clientId, req.body?.relation || null);
+  if (r.changes) {
+    systemMessage(clientId, `👋 ${u.name}${req.body?.relation ? '（' + req.body.relation + '）' : ''} 已加入 ${client.name} 的家庭群组。`);
+    audit(req.user.id, 'link_family', `user:${u.id} client:${clientId}`);
+  }
+  db.prepare(`UPDATE enquiries SET status = 'done' WHERE user_id = ?`).run(u.id);
+  broadcastUser(u.id, 'linked', { client_id: clientId });
   res.json({ ok: true });
 });
 api.get('/enquiries', requireRole('coordinator'), (req, res) => res.json(db.prepare('SELECT * FROM enquiries ORDER BY id DESC LIMIT 200').all()));

@@ -103,7 +103,7 @@ export default function Landing() {
           <div>
             <h2 className="sec">{t('appTitle')}</h2>
             <p className="muted" style={{ maxWidth: 620 }}>{t('appD')}</p>
-            <div className="row"><a className="btn lg" href={APK_URL}><Smartphone size={18} /> {t('downloadApk')}</a><Link className="btn lg secondary" to="/app/login">{t('openWeb')}</Link></div>
+            <div className="row"><a className="btn lg" href={APK_URL}><Smartphone size={18} /> {t('downloadApk')}</a><Link className="btn lg secondary" to="/app/register">{t('register')}</Link><Link className="btn lg secondary" to="/app/login">{t('openWeb')}</Link></div>
             {demo && <><div className="demo-grid" style={{ marginTop: '1.2rem' }}>
               {[['roleElder', '0100000011'], ['roleFamily', '0100000012'], ['roleCoordinator', '0100000001'], ['roleCaregiver', '0100000002']].map(([r, p]) => <div className="card small" key={p}><b>{t(r)}</b><br /><code>{p}</code> / <code>123456</code></div>)}
             </div>

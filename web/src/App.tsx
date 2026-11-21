@@ -35,7 +35,8 @@ function AppShell() {
       <Routes>
         <Route index element={<AppHome />} />
         <Route path="login" element={<Login />} />
-        <Route path="apply" element={<Login initialMode="apply" />} />
+        <Route path="register" element={<Login initialMode="register" />} />
+        <Route path="apply" element={<Login initialMode="register" />} />
         <Route path="activate" element={<Login initialMode="activate" />} />
         <Route path="activate/:code" element={<Login />} />
         <Route path="elder" element={<Guard role="elder"><Elder /></Guard>} />

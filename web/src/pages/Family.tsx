@@ -1,12 +1,14 @@
 // 子女端：档案、报告、警报、预约、群组、付费、团队。
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { homeOutline, chatbubblesOutline, documentTextOutline, calendarOutline, alertCircleOutline, medkitOutline, cardOutline, peopleOutline } from 'ionicons/icons';
+import { IonPage, IonContent, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton } from '@ionic/react';
+import { checkmarkCircle, ellipseOutline, timeOutline, refreshOutline, logOutOutline } from 'ionicons/icons';
 import { useT } from '../i18n';
 import { useStore } from '../store';
 import { api, fmtTime, photoUrl } from '../api';
 import { IonIcon } from '@ionic/react';
 import { callOutline, logoWhatsapp, locationOutline, happyOutline, waterOutline, thermometerOutline, pulseOutline, imagesOutline } from 'ionicons/icons';
-import { Shell, useLoad, Badge, Field, Empty, TASK_TYPES, telLink, waLink, mapsLink, localDT, useErr, Btn } from '../components/ui';
+import { ChangePasswordButton, LangSelect, Shell, useLoad, Badge, Field, Empty, TASK_TYPES, telLink, waLink, mapsLink, localDT, useErr, Btn } from '../components/ui';
 
 export default function Family() {
   const { t } = useT();
@@ -23,7 +25,7 @@ export default function Family() {
   const right = clients && clients.length > 1 ? (
     <select className="lang-select light" value={cid} onChange={e => setCid(Number(e.target.value))}>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
   ) : null;
-  if (!cid) return <Shell title={t('appName')} tabs={tabs} tab={tab} onTab={setTab}><Empty /></Shell>;
+  if (!cid) return <Pending />;
   return (
     <Shell title={t('appName')} tabs={tabs} tab={tab} onTab={setTab} right={right}>
       {tab === 'overview' && <Overview cid={cid} hotline={hotline} go={setTab} />}
@@ -231,5 +233,40 @@ export function Team({ showPrice }: { showPrice?: boolean }) {
           {p.phone && <div className="row small" style={{ marginTop: '.2rem' }}><a href={telLink(p.phone)}><IonIcon icon={callOutline} /> {p.phone}</a></div>}
         </div>)}</div>
       </div>))}</div>
+  );
+}
+
+/** 自己注册、但协调员还没关联到长者时显示 */
+function Pending() {
+  const { t } = useT();
+  const { user, hotline, refreshMe, logout } = useStore();
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { const id = setInterval(() => { refreshMe(); }, 30000); return () => clearInterval(id); }, [refreshMe]);
+  const msg = t('pendingWa').replace('{name}', user?.name || '').replace('{phone}', user?.phone || '');
+  return (
+    <IonPage>
+      <IonHeader><IonToolbar color="primary"><IonTitle>{t('appName')}</IonTitle>
+        <IonButtons slot="end"><LangSelect light /><ChangePasswordButton /><IonButton onClick={logout}><IonIcon slot="icon-only" icon={logOutOutline} /></IonButton></IonButtons>
+      </IonToolbar></IonHeader>
+      <IonContent className="ion-padding">
+        <div className="main" style={{ maxWidth: 560 }}>
+          <div className="card pending-card">
+            <div className="pending-ic"><IonIcon icon={timeOutline} /></div>
+            <h2>{t('pendingTitle')}</h2>
+            <p className="muted">{t('pendingIntro')}</p>
+            <ul className="pending-steps">
+              <li className="done"><IonIcon icon={checkmarkCircle} /> {t('stepCreated')} · {user?.name} · {user?.phone}</li>
+              <li><IonIcon icon={ellipseOutline} /> {t('stepVerify')}</li>
+              <li><IonIcon icon={ellipseOutline} /> {t('stepOpen')}</li>
+            </ul>
+            <div className="stack">
+              <Btn v="ok block" href={waLink(hotline, msg)} target="_blank" rel="noreferrer"><IonIcon slot="start" icon={logoWhatsapp} />{t('contactNow')} · WhatsApp</Btn>
+              <Btn v="block secondary" href={telLink(hotline)}><IonIcon slot="start" icon={callOutline} />{t('call')} +{hotline}</Btn>
+              <Btn v="ghost block" disabled={busy} onClick={async () => { setBusy(true); await refreshMe(); setBusy(false); }}><IonIcon slot="start" icon={refreshOutline} />{t('checkAgain')}</Btn>
+            </div>
+          </div>
+        </div>
+      </IonContent>
+    </IonPage>
   );
 }

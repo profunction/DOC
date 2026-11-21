@@ -229,3 +229,11 @@ ion-button + ion-button { margin-left: 0; }
 .invite-box { border: 2px solid var(--brand); background: var(--brand-soft); border-radius: 12px; padding: 1rem; margin-bottom: .85rem; }
 .invite-box .code { font-size: 1.6rem; font-weight: 800; letter-spacing: .2em; color: var(--brand); }
 .invite-box .link { word-break: break-all; font-size: .85rem; background: #fff; border-radius: 8px; padding: .5rem .6rem; margin: .5rem 0; }
+
+/* 等待开通 */
+.pending-card { text-align: center; margin-top: 1rem; }
+.pending-ic { width: 72px; height: 72px; border-radius: 50%; background: var(--warn-soft); color: var(--warn); display: flex; align-items: center; justify-content: center; margin: .5rem auto 1rem; font-size: 2.4rem; }
+.pending-steps { list-style: none; padding: 0; margin: 1rem 0 1.4rem; text-align: left; }
+.pending-steps li { display: flex; gap: .5rem; align-items: center; padding: .5rem 0; color: var(--muted); border-bottom: 1px solid var(--line); }
+.pending-steps li.done { color: var(--ok); font-weight: 600; }
+.pending-steps ion-icon { font-size: 1.3rem; flex: 0 0 auto; }

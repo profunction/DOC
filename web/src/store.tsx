@@ -11,6 +11,7 @@ interface Store {
   user: User | null; clientIds: number[]; hotline: string; ready: boolean;
   login: (phone: string, password: string) => Promise<User>;
   setSession: (token: string) => Promise<void>;
+  refreshMe: () => Promise<void>;
   logout: () => void;
   onEvent: (h: Handler) => () => void;
   lastEvent: { event: string; data: any; n: number } | null;
@@ -46,6 +47,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setLastEvent({ event, data, n: counter.current });
       setEventSeq(seq => ({ ...seq, [event]: (seq[event] || 0) + 1 }));
       handlers.current.forEach(h => h(event, data));
+      if (event === 'linked') { loadMe(); notify('✅ 已开通 / Account linked', '现在可以查看父母的资料了'); }
       if (event === 'alert' && data.status === 'new' && (user.role === 'coordinator' || user.role === 'family')) {
         notify(`🚨 ${data.client_name || ''} 紧急求助`, '协调中心请马上处理 / Emergency alert');
       } else if (event === 'report' && user.role === 'family') {
@@ -64,6 +66,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return r.user;
     },
     setSession: async (token) => { setToken(token); await loadMe(); },
+    refreshMe: loadMe,
     logout: () => { setToken(''); setUser(null); setClientIds([]); },
     onEvent: (h) => { handlers.current.add(h); return () => handlers.current.delete(h); },
   }), [user, clientIds, hotline, ready, lastEvent, eventSeq, loadMe]);
