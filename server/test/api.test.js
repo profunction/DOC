@@ -251,3 +251,11 @@ test('push tokens: saved per user; FCM silently off without a service account', 
   assert.equal(r.ok, true); assert.equal(r.fcm, false);
   assert.equal((await j('/push/token', { method: 'DELETE', body: { token: 'fcm-token-abcdefghijklmnopqrstuvwxyz' } }, fam)).status, 200);
 });
+
+test('geocode: needs login, short query rejected, network failure returns empty object', async () => {
+  assert.equal((await j('/geocode?q=Taman%20Pelangi')).status, 401);
+  const coord = await login('0100000001');
+  assert.equal((await j('/geocode?q=ab', {}, coord)).status, 400);
+  const r = await j('/geocode?q=Taman%20Pelangi%20Johor%20Bahru', {}, coord);
+  assert.equal(r.status, 200); assert.equal(typeof r.data, 'object');
+});

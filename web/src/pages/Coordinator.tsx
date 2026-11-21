@@ -8,6 +8,7 @@ import { IonIcon } from '@ionic/react';
 import { cameraOutline, calendarOutline, addOutline, watchOutline, logoWhatsapp, copyOutline, refreshOutline, settingsOutline, notificationsOutline, cloudDownloadOutline, callOutline, personAddOutline as personAddIcon, chevronForward } from 'ionicons/icons';
 import { ElderPhoneSetup } from '../components/ElderPhoneSetup';
 import { WatchPanel } from '../components/WatchPanel';
+import { MapView } from '../components/MapView';
 import { Shell, useLoad, Badge, Field, Empty, TASK_TYPES, ALERT_TYPES, PARTNER_TYPES, PLANS, telLink, waLink, mapsLink, localDT, useErr, Btn } from '../components/ui';
 import { AlertCard, ReportCard, Chat, Team } from './Family';
 
@@ -280,6 +281,11 @@ function ClientForm({ c, onSaved }: { c?: any; onSaved: () => void }) {
   }
   const S = (k: string) => ({ value: f[k] ?? '', onChange: (e: any) => setF({ ...f, [k]: e.target.value }) });
   const H = (k: string) => ({ value: f.health[k] ?? '', onChange: (e: any) => setF({ ...f, health: { ...f.health, [k]: e.target.value } }) });
+  const [geo, setGeo] = useState(false);
+  async function geocode() {
+    if (!f.address) return; setGeo(true);
+    try { const r = await api(`/geocode?q=${encodeURIComponent(f.address + (f.region ? ', ' + f.region : '') + ', Johor, Malaysia')}`); if (r.lat) setF({ ...f, lat: r.lat, lng: r.lng }); else show(new Error(t('geocodeNone'))); } catch (err) { show(err); } finally { setGeo(false); }
+  }
   return (
     <div className="card"><h3>{c ? t('editClient') : t('newClient')}</h3>{Err}
       <form onSubmit={save}>
@@ -290,6 +296,7 @@ function ClientForm({ c, onSaved }: { c?: any; onSaved: () => void }) {
           <Field label={t('region')}><input {...S('region')} /></Field>
           <Field label={t('address')}><input {...S('address')} /></Field>
           <Field label={t('lat')}><input {...S('lat')} /></Field><Field label={t('lng')}><input {...S('lng')} /></Field>
+          <div className="field"><label>&nbsp;</label><Btn v="ghost sm" onClick={geocode} disabled={geo}>{geo ? t('loading') : t('locateAddress')}</Btn></div>
           <Field label={t('plan')}><select {...S('plan')}>{PLANS.map(p => <option key={p} value={p}>{t('plan_' + p)}</option>)}</select></Field>
           <Field label={t('monthlyFee')}><input type="number" {...S('monthly_fee')} /></Field>
           <Field label={t('emergencyContact')}><input {...S('emergency_contact')} /></Field>
@@ -300,6 +307,7 @@ function ClientForm({ c, onSaved }: { c?: any; onSaved: () => void }) {
         <div className="form-grid">
           {HEALTH_KEYS.map(k => <Field key={k} label={t({ conditions: 'conditions', meds: 'meds', allergies: 'allergies', doctor: 'doctor', mobility: 'mobility', language: 'language', diet: 'langDiet', notes: 'healthNotes' }[k] as string)}><input {...H(k)} /></Field>)}
         </div>
+        {f.lat && f.lng && <MapView center={{ lat: Number(f.lat), lng: Number(f.lng) }} home={{ lat: Number(f.lat), lng: Number(f.lng) }} onPick={p => setF({ ...f, lat: p.lat, lng: p.lng })} height={220} />}
         <Field label={t('notes')}><textarea {...S('notes')} /></Field>
         <label className="row small"><input type="checkbox" checked={!!f.consent || !!c?.consent_at} onChange={e => setF({ ...f, consent: e.target.checked })} /> {t('consent')} (PDPA)</label>
         <div className="row" style={{ marginTop: '.8rem' }}><Btn v="">{t('save')}</Btn></div>

@@ -515,6 +515,20 @@ api.get('/enquiries', requireRole('coordinator'), (req, res) => res.json(db.prep
   (SELECT c.name FROM family_links f JOIN clients c ON c.id = f.client_id WHERE f.user_id = e.user_id ORDER BY c.id LIMIT 1) AS client_name FROM enquiries e ORDER BY e.id DESC LIMIT 200`).all()));
 api.get('/audit', requireRole('coordinator'), (req, res) => res.json(db.prepare(`SELECT a.*, u.name AS user_name FROM audit_log a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.id DESC LIMIT 200`).all()));
 
+// ---------- 地址定位（OpenStreetMap Nominatim，免费；服务器代转以带上 User-Agent） ----------
+const geoCache = new Map();
+api.get('/geocode', rateLimit('geocode', 60), async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 200);
+  if (q.length < 4) return res.status(400).json({ error: 'query_too_short' });
+  if (geoCache.has(q)) return res.json(geoCache.get(q));
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=my&q=${encodeURIComponent(q)}`, { headers: { 'User-Agent': `AnXinCare/1.0 (+https://wa.me/${getHotline()})`, 'Accept-Language': 'zh,en,ms' }, signal: AbortSignal.timeout(8000) });
+    const j = await r.json();
+    const out = j?.[0] ? { lat: Number(j[0].lat), lng: Number(j[0].lon), name: j[0].display_name } : {};
+    geoCache.set(q, out); res.json(out);
+  } catch { res.json({}); }
+});
+
 // ---------- 手表 ----------
 api.get('/clients/:id/watch', (req, res) => { const id = guardClient(req, res); if (!id) return; res.json(watchSummary(id)); });
 api.get('/clients/:id/watch/trail', (req, res) => { const id = guardClient(req, res); if (!id) return; res.json(watchTrail(id, Number(req.query.hours) || 24)); });

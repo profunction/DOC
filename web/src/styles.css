@@ -280,3 +280,13 @@ ion-button + ion-button { margin-left: 0; }
 .watch-stats ion-icon { font-size: 1.4rem; color: var(--brand); }
 .watch-stats b { font-size: 1.05rem; } .watch-stats span { font-size: .72rem; color: var(--muted); }
 .trail { width: 100%; height: auto; margin-top: .6rem; background: #f3f6f4; border-radius: 10px; border: 1px solid var(--line); }
+
+/* 地图 */
+.map-wrap { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); margin-top: .6rem; position: relative; z-index: 0; }
+.map { width: 100%; }
+.map-wrap.picking { outline: 3px solid var(--brand); }
+.map-wrap.picking .leaflet-container { cursor: crosshair; }
+.pin { background: none; border: 0; }
+.pin-dot { width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.pin-dot span { transform: rotate(45deg); line-height: 1; font-family: "Noto Color Emoji", "Apple Color Emoji", sans-serif; }
+.leaflet-container { font: inherit; }

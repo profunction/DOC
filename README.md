@@ -65,6 +65,7 @@ DOC/
 | App 图标 | [Ionicons](https://ionic.io/ionicons) | MIT | 各页面 tabs |
 | 网站图标 | [Lucide](https://lucide.dev) | ISC | `web/src/pages/Landing.tsx` |
 | 网站插画 | [unDraw](https://undraw.co) | unDraw 许可（可商用） | `web/public/illustrations/` |
+| 地图 | [Leaflet](https://leafletjs.com) + [OpenStreetMap](https://www.openstreetmap.org) 图块、Nominatim 地址定位 | BSD / ODbL | `web/src/components/MapView.tsx`、`GET /api/geocode` |
 | 中文字体 | Noto Sans SC（Google Fonts） | OFL | `web/index.html` |
 | 手表 GPS / SOS / 跌倒事件 | [Traccar](https://www.traccar.org) | Apache-2.0 | `server/src/integrations.js`、`docker-compose.stack.yml`、`deploy/traccar.xml` |
 | App 关着也能收到的推送 | [ntfy](https://ntfy.sh) | Apache-2.0 | `server/src/integrations.js`、`docker-compose.stack.yml` |
