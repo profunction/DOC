@@ -42,11 +42,13 @@ export default function Family() {
 
 function Overview({ cid, hotline, go }: { cid: number; hotline: string; go: (t: string) => void }) {
   const { t } = useT();
-  const { data: s } = useLoad<any>(`/clients/${cid}/summary`, [], ['alert', 'task', 'report']);
+  const { data: s } = useLoad<any>(`/clients/${cid}/summary`, [], ['alert', 'task', 'report', 'message']);
   if (!s) return <p className="muted">{t('loading')}</p>;
   const c = s.client;
   return (
     <div>
+      {c.verified === 0 && <div className="unverified-banner"><b>{t('unverifiedTitle')}</b><p>{t('unverifiedText')}</p>
+        <div className="row"><Btn v="ok sm" href={waLink(hotline)} target="_blank" rel="noreferrer"><IonIcon slot="start" icon={logoWhatsapp} />{t('contactNow')}</Btn><Btn v="ghost sm" onClick={() => go('profile')}>{t('editParent')}</Btn></div></div>}
       {s.openAlerts?.length > 0 && <div className="alert-banner" onClick={() => go('alerts')}>🚨 {t('openAlert')}：{t('a_' + s.openAlerts[0].type)} · {t('as_' + s.openAlerts[0].status)} · {fmtTime(s.openAlerts[0].created_at)}</div>}
       <div className="card">
         <div className="row between"><h3>{c.name}</h3><Badge>{t('plan_' + c.plan)}</Badge></div>
@@ -190,13 +192,15 @@ export function Chat({ cid }: { cid: number }) {
 
 function Profile({ cid }: { cid: number }) {
   const { t } = useT();
-  const { data: c } = useLoad<any>(`/clients/${cid}`);
+  const { data: c, reload } = useLoad<any>(`/clients/${cid}`);
+  const [edit, setEdit] = useState(false);
   if (!c) return <p className="muted">{t('loading')}</p>;
+  if (edit) return <ParentEdit c={c} onDone={() => { setEdit(false); reload(); }} />;
   const h = c.health || {};
   const rows: [string, any][] = [[t('conditions'), h.conditions], [t('meds'), h.meds], [t('allergies'), h.allergies], [t('doctor'), h.doctor], [t('mobility'), h.mobility], [t('langDiet'), [h.language, h.diet].filter(Boolean).join(' / ')], [t('healthNotes'), h.notes], [t('emergencyContact'), c.emergency_contact], [t('preferredHospital'), c.preferred_hospital], [t('watch'), c.watch_id], [t('plan'), `${t('plan_' + c.plan)} · RM${c.monthly_fee}/${t('perMonth').split(' ')[0] === 'RM' ? 'month' : '月'}`], [t('consent'), c.consent_at ? `✅ ${fmtTime(c.consent_at)}` : '—']];
   return (
     <div>
-      <div className="card"><h3>{c.name} · {c.gender} · {c.birth_year}</h3><p className="small muted">{c.address}</p>
+      <div className="card"><div className="row between"><h3>{c.name} · {c.gender || ''} · {c.birth_year || ''}</h3>{c.verified === 0 && <Btn v="ghost sm" onClick={() => setEdit(true)}>{t('editParent')}</Btn>}</div><p className="small muted">{c.address}</p>
         <table className="tbl"><tbody>{rows.map(([k, v]) => <tr key={k}><th style={{ width: '38%' }}>{k}</th><td>{v || '-'}</td></tr>)}</tbody></table>
       </div>
       <div className="card"><h3><IonIcon icon={peopleOutline} /> {t('familyMembers')}</h3><div className="list">{c.family?.map((f: any) => <div key={f.id} className="row between"><span>{f.name} <span className="muted small">{f.relation}</span></span><a className="small" href={telLink(f.phone)}>{f.phone}</a></div>)}</div></div>
@@ -268,5 +272,38 @@ function Pending() {
         </div>
       </IonContent>
     </IonPage>
+  );
+}
+
+/** 协调员确认前，子女可以修改自己建的父母档案 */
+function ParentEdit({ c, onDone }: { c: any; onDone: () => void }) {
+  const { t } = useT();
+  const h = c.health || {};
+  const [f, setF] = useState<any>({ name: c.name || '', gender: c.gender || '', birth_year: c.birth_year || '', address: c.address || '', region: c.region || '', emergency_contact: c.emergency_contact || '', preferred_hospital: c.preferred_hospital || '', conditions: h.conditions || '', meds: h.meds || '', allergies: h.allergies || '', mobility: h.mobility || '', language: h.language || '', notes: h.notes || '' });
+  const { Err, show } = useErr();
+  const S = (k: string) => ({ value: f[k], onChange: (e: any) => setF({ ...f, [k]: e.target.value }) });
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const { conditions, meds, allergies, mobility, language, notes, ...basic } = f;
+    try { await api(`/clients/${c.id}`, { method: 'PATCH', body: { ...basic, birth_year: Number(basic.birth_year) || null, health: { conditions, meds, allergies, mobility, language, notes } } }); onDone(); } catch (err) { show(err); }
+  }
+  return (
+    <div className="card"><h3>{t('editParent')}</h3>{Err}
+      <form onSubmit={save}><div className="form-grid">
+        <Field label={t('name')}><input {...S('name')} required /></Field>
+        <Field label={t('gender')}><select {...S('gender')}><option value="">—</option><option>女</option><option>男</option></select></Field>
+        <Field label={t('birthYear')}><input inputMode="numeric" {...S('birth_year')} /></Field>
+        <Field label={t('region')}><input {...S('region')} /></Field>
+        <Field label={t('address')}><input {...S('address')} /></Field>
+        <Field label={t('emergencyContact')}><input {...S('emergency_contact')} /></Field>
+        <Field label={t('preferredHospital')}><input {...S('preferred_hospital')} /></Field>
+        <Field label={t('conditions')}><input {...S('conditions')} /></Field>
+        <Field label={t('meds')}><input {...S('meds')} /></Field>
+        <Field label={t('allergies')}><input {...S('allergies')} /></Field>
+        <Field label={t('mobility')}><input {...S('mobility')} /></Field>
+        <Field label={t('language')}><input {...S('language')} /></Field>
+        <Field label={t('healthNotes')}><input {...S('notes')} /></Field>
+      </div><div className="row"><Btn v="">{t('save')}</Btn><Btn v="ghost" onClick={onDone}>{t('cancel')}</Btn></div></form>
+    </div>
   );
 }

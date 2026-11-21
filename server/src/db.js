@@ -198,6 +198,12 @@ CREATE TABLE IF NOT EXISTS audit_log (               -- 谁看过健康资料（
 );
 `);
 
+// 后加的字段（旧数据库自动补上）
+for (const sql of [
+  `ALTER TABLE clients ADD COLUMN verified INTEGER NOT NULL DEFAULT 1`,   // 0 = 顾客自助注册、协调员尚未确认
+  `ALTER TABLE clients ADD COLUMN source TEXT`,
+]) { try { db.exec(sql); } catch { /* 已存在 */ } }
+
 export function audit(userId, action, target) {
   db.prepare('INSERT INTO audit_log (user_id, action, target) VALUES (?,?,?)').run(userId ?? null, action, target ?? null);
 }

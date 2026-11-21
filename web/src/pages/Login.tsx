@@ -48,7 +48,7 @@ export default function Login({ initialMode }: { initialMode?: 'login' | 'regist
   }
 
   // ---- 自己注册（子女 / 家属账号）----
-  const [rg, setRg] = useState({ name: '', phone: '', password: '', password2: '', parent_name: '', city: '', message: '', agree: false });
+  const [rg, setRg] = useState({ name: '', phone: '', password: '', password2: '', relation: '女儿', parent_name: '', parent_birth_year: '', city: '', address: '', conditions: '', message: '', agree: false });
   async function register(e: FormEvent) {
     e.preventDefault(); setErr('');
     if (rg.password !== rg.password2) { setErr(t('passwordMismatch')); return; }
@@ -56,7 +56,7 @@ export default function Login({ initialMode }: { initialMode?: 'login' | 'regist
     setBusy(true);
     try {
       if (isNative && !getApiBase()) throw new ApiError(0, 'not_configured');
-      const { password2, agree, ...body } = rg;
+      const { password2, ...body } = rg;
       const r = await api('/public/register', { body: { ...body, lang }, auth: false });
       await setSession(r.token);
       nav('/app', { replace: true });
@@ -95,12 +95,18 @@ export default function Login({ initialMode }: { initialMode?: 'login' | 'regist
           <p className="small muted">{t('registerIntro')}</p>
           {Err}
           <form onSubmit={register}>
+            <div className="form-sec">{t('aboutYou')}</div>
             <div className="field"><label>{t('yourName')}</label><input value={rg.name} onChange={e => setRg({ ...rg, name: e.target.value })} required maxLength={80} autoComplete="name" /></div>
             <div className="field"><label>{t('yourPhone')}</label><input inputMode="tel" value={rg.phone} onChange={e => setRg({ ...rg, phone: e.target.value })} required maxLength={20} autoComplete="tel" placeholder="0123456789" /></div>
             <div className="field"><label>{t('newPassword')}</label><input type="password" autoComplete="new-password" minLength={6} value={rg.password} onChange={e => setRg({ ...rg, password: e.target.value })} required /></div>
             <div className="field"><label>{t('confirmPassword')}</label><input type="password" autoComplete="new-password" minLength={6} value={rg.password2} onChange={e => setRg({ ...rg, password2: e.target.value })} required /></div>
-            <div className="field"><label>{t('parentName')}</label><input value={rg.parent_name} onChange={e => setRg({ ...rg, parent_name: e.target.value })} maxLength={80} /></div>
+            <div className="form-sec">{t('aboutParent')}</div>
+            <div className="field"><label>{t('iAmTheir')}</label><select value={rg.relation} onChange={e => setRg({ ...rg, relation: e.target.value })}><option value="女儿">{t('relDaughter')}</option><option value="儿子">{t('relSon')}</option><option value="家属">{t('relOther')}</option></select></div>
+            <div className="field"><label>{t('parentName')}</label><input value={rg.parent_name} onChange={e => setRg({ ...rg, parent_name: e.target.value })} required maxLength={80} placeholder="陈阿婆 / Puan Aminah" /></div>
+            <div className="field"><label>{t('parentBirthYear')}</label><input inputMode="numeric" value={rg.parent_birth_year} onChange={e => setRg({ ...rg, parent_birth_year: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) })} placeholder="1948" /></div>
             <div className="field"><label>{t('parentArea')}</label><input value={rg.city} onChange={e => setRg({ ...rg, city: e.target.value })} placeholder="新山市区 / 士古来 / 古来 …" maxLength={80} /></div>
+            <div className="field"><label>{t('parentAddress')}</label><input value={rg.address} onChange={e => setRg({ ...rg, address: e.target.value })} maxLength={200} /></div>
+            <div className="field"><label>{t('parentConditions')}</label><input value={rg.conditions} onChange={e => setRg({ ...rg, conditions: e.target.value })} maxLength={500} /></div>
             <div className="field"><label>{t('yourMessage')}</label><textarea value={rg.message} onChange={e => setRg({ ...rg, message: e.target.value })} maxLength={1000} /></div>
             <label className="row small" style={{ marginBottom: '.8rem', flexWrap: 'nowrap', alignItems: 'flex-start' }}><input type="checkbox" checked={rg.agree} onChange={e => setRg({ ...rg, agree: e.target.checked })} style={{ marginTop: '.2rem' }} /><span>{t('agreeTerms')} <a href="/legal" target="_blank" rel="noreferrer">{t('terms')}</a></span></label>
             <Btn v="block" disabled={busy}>{busy ? t('loading') : t('register')}</Btn>

@@ -62,23 +62,41 @@ pub.post('/enquiry', rateLimit('enquiry', 10), (req, res) => {
   res.json({ ok: true });
 });
 
-// 顾客自己注册：只能注册"子女 / 家属"账号；注册后立即可登录，但在协调员关联到长者之前看不到任何长者资料
+// 顾客自己注册：建子女账号 + 顾客自己填的父母档案（verified=0），注册后马上可以使用；
+// 只看得到自己填的这份档案，协调员核实后点「确认开通」。
 pub.post('/register', rateLimit('register', 5), (req, res) => {
   const b = req.body || {};
   const name = String(b.name || '').trim().slice(0, 80);
   const phone = String(b.phone || '').replace(/[^0-9+]/g, '');
   const pw = String(b.password || '');
+  const parent = String(b.parent_name || '').trim().slice(0, 80);
   if (!name || !phone) return res.status(400).json({ error: 'name_phone_required' });
+  if (!parent) return res.status(400).json({ error: 'parent_required' });
   if (!/^\+?[0-9]{9,15}$/.test(phone)) return res.status(400).json({ error: 'bad_phone' });
   if (pw.length < 6) return res.status(400).json({ error: 'password_too_short' });
+  if (!b.agree) return res.status(400).json({ error: 'must_agree' });
   if (db.prepare('SELECT id FROM users WHERE phone = ?').get(phone)) return res.status(400).json({ error: 'phone_exists' });
-  const r = db.prepare('INSERT INTO users (phone, password_hash, name, role, lang) VALUES (?,?,?,?,?)').run(phone, bcrypt.hashSync(pw, 10), name, 'family', ['zh', 'en', 'ms'].includes(b.lang) ? b.lang : 'zh');
-  const parent = String(b.parent_name || '').trim().slice(0, 80);
-  const msg = [parent ? `父母：${parent}` : '', String(b.message || '').slice(0, 1000)].filter(Boolean).join('\n');
-  db.prepare('INSERT INTO enquiries (name, phone, city, message, lang, source, user_id) VALUES (?,?,?,?,?,?,?)').run(name, phone, b.city ? String(b.city).slice(0, 80) : null, msg || null, b.lang || 'zh', 'register', r.lastInsertRowid);
-  audit(r.lastInsertRowid, 'self_register', `user:${r.lastInsertRowid}`);
-  pushNtfy({ title: `🆕 新注册：${name}`, message: `${phone}${b.city ? ' · ' + b.city : ''}${parent ? '\n父母：' + parent : ''}\n请核实后在「网站咨询」关联到长者`, priority: 'default', tags: ['new'] });
-  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(r.lastInsertRowid);
+  const lang = ['zh', 'en', 'ms'].includes(b.lang) ? b.lang : 'zh';
+  const txt = (v, n = 200) => (v ? String(v).trim().slice(0, n) : null);
+  const birth = Number(b.parent_birth_year) || null;
+  const out = db.transaction(() => {
+    const u = db.prepare('INSERT INTO users (phone, password_hash, name, role, lang) VALUES (?,?,?,?,?)').run(phone, bcrypt.hashSync(pw, 10), name, 'family', lang);
+    const c = db.prepare(`INSERT INTO clients (name, gender, birth_year, address, region, plan, monthly_fee, emergency_contact, consent_at, health_enc, notes, verified, source)
+      VALUES (?,?,?,?,?, 'standard', 0, ?, datetime('now'), ?, ?, 0, 'register')`).run(
+      parent, txt(b.parent_gender, 10), birth && birth > 1900 && birth < 2010 ? birth : null, txt(b.address), txt(b.city, 80),
+      `${name}（${txt(b.relation, 20) || '家属'}）${phone}`,
+      encrypt({ conditions: txt(b.conditions, 500) || '', meds: txt(b.meds, 500) || '', allergies: txt(b.allergies) || '' }),
+      txt(b.message, 1000));
+    db.prepare('INSERT INTO family_links (user_id, client_id, relation) VALUES (?,?,?)').run(u.lastInsertRowid, c.lastInsertRowid, txt(b.relation, 20));
+    db.prepare('INSERT INTO enquiries (name, phone, city, message, lang, source, user_id) VALUES (?,?,?,?,?,?,?)')
+      .run(name, phone, txt(b.city, 80), `父母：${parent}${b.message ? '\n' + txt(b.message, 1000) : ''}`, lang, 'register', u.lastInsertRowid);
+    db.prepare(`INSERT INTO messages (client_id, sender_id, kind, text) VALUES (?, NULL, 'system', ?)`).run(c.lastInsertRowid,
+      `👋 欢迎 ${name}！${parent} 的档案已建立。协调员会在一个工作天内联络您确认资料与配套；确认前也可以先预约服务或在这里留言。紧急情况请先拨 999。`);
+    return { userId: Number(u.lastInsertRowid), clientId: Number(c.lastInsertRowid) };
+  })();
+  audit(out.userId, 'self_register', `user:${out.userId} client:${out.clientId}`);
+  pushNtfy({ title: `🆕 新注册：${name}`, message: `${phone}${b.city ? ' · ' + b.city : ''}\n父母：${parent}\n请联络核实后在「客人」页确认开通`, priority: 'default', tags: ['new'] });
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(out.userId);
   res.json({ token: sign(u), user: safeUser(u) });
 });
 
@@ -159,12 +177,22 @@ api.post('/clients', requireRole('coordinator'), (req, res) => {
   });
   res.json({ id: r.lastInsertRowid });
 });
-api.patch('/clients/:id', requireRole('coordinator'), (req, res) => {
+api.patch('/clients/:id', requireRole('coordinator', 'family'), (req, res) => {
   const id = Number(req.params.id);
   const cur = db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
   if (!cur) return res.status(404).json({ error: 'not_found' });
-  const b = req.body || {};
-  const cols = ['name','gender','birth_year','address','region','lat','lng','plan','monthly_fee','emergency_contact','preferred_hospital','watch_id','notes','active'];
+  let b = req.body || {};
+  if (req.user.role === 'family') {
+    // 子女只能在协调员确认前，修改自己关联的档案的基本与健康资料
+    if (!canSeeClient(req.user, id) || cur.verified) return res.status(403).json({ error: 'forbidden' });
+    const allow = ['name', 'gender', 'birth_year', 'address', 'region', 'emergency_contact', 'preferred_hospital', 'health'];
+    b = Object.fromEntries(Object.entries(b).filter(([k]) => allow.includes(k)));
+  }
+  if (b.verified === 1 && !cur.verified) {
+    systemMessage(id, `✅ 协调员已确认 ${cur.name} 的资料，服务正式开通。`);
+    db.prepare(`UPDATE enquiries SET status = 'done' WHERE user_id IN (SELECT user_id FROM family_links WHERE client_id = ?)`).run(id);
+  }
+  const cols = ['name','gender','birth_year','address','region','lat','lng','plan','monthly_fee','emergency_contact','preferred_hospital','watch_id','notes','active','verified'];
   for (const c of cols) if (b[c] !== undefined) db.prepare(`UPDATE clients SET ${c} = ? WHERE id = ?`).run(b[c], id);
   if (b.health !== undefined) {
     const merged = { ...(decrypt(cur.health_enc) || {}), ...b.health };
@@ -453,7 +481,8 @@ api.post('/clients/:id/family', requireRole('coordinator'), (req, res) => {
   broadcastUser(u.id, 'linked', { client_id: clientId });
   res.json({ ok: true });
 });
-api.get('/enquiries', requireRole('coordinator'), (req, res) => res.json(db.prepare('SELECT * FROM enquiries ORDER BY id DESC LIMIT 200').all()));
+api.get('/enquiries', requireRole('coordinator'), (req, res) => res.json(db.prepare(`SELECT e.*, (SELECT c.id FROM family_links f JOIN clients c ON c.id = f.client_id WHERE f.user_id = e.user_id ORDER BY c.id LIMIT 1) AS client_id,
+  (SELECT c.name FROM family_links f JOIN clients c ON c.id = f.client_id WHERE f.user_id = e.user_id ORDER BY c.id LIMIT 1) AS client_name FROM enquiries e ORDER BY e.id DESC LIMIT 200`).all()));
 api.get('/audit', requireRole('coordinator'), (req, res) => res.json(db.prepare(`SELECT a.*, u.name AS user_name FROM audit_log a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.id DESC LIMIT 200`).all()));
 
 // ---------- 协调员总览 ----------
@@ -465,6 +494,7 @@ api.get('/dashboard', requireRole('coordinator'), (req, res) => {
     openAlerts: db.prepare(`SELECT COUNT(*) AS n FROM alerts WHERE status != 'resolved'`).get().n,
     todayTasks: db.prepare(`SELECT COUNT(*) AS n FROM tasks WHERE substr(scheduled_at,1,10) = ? AND status != 'cancelled'`).get(today).n,
     unassigned: db.prepare(`SELECT COUNT(*) AS n FROM tasks WHERE status = 'requested'`).get().n,
+    unverified: db.prepare(`SELECT COUNT(*) AS n FROM clients WHERE active = 1 AND verified = 0`).get().n,
     monthlyRevenue: db.prepare(`SELECT COALESCE(SUM(monthly_fee),0) AS s FROM clients WHERE active = 1`).get().s,
     dueTotal: db.prepare(`SELECT COALESCE(SUM(amount),0) AS s FROM payments WHERE status = 'due'`).get().s,
     newEnquiries: db.prepare(`SELECT COUNT(*) AS n FROM enquiries WHERE created_at >= datetime('now','-7 days')`).get().n,

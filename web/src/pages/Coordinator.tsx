@@ -38,7 +38,7 @@ function Dashboard({ go }: { go: (t: string) => void }) {
   const { data: d } = useLoad<any>('/dashboard', [], ['alert', 'task', 'report']);
   const { data: open } = useLoad<any[]>('/alerts?status=open', [], ['alert']);
   if (!d) return <p className="muted">{t('loading')}</p>;
-  const stats = [['clientsCount', d.clients], ['openAlerts', d.openAlerts, 'alert'], ['todayTasks', d.todayTasks], ['unassigned', d.unassigned], ['monthlyRevenue', `RM ${d.monthlyRevenue}`], ['dueTotal', `RM ${d.dueTotal}`], ['newEnquiries', d.newEnquiries]];
+  const stats = [['clientsCount', d.clients], ['unverifiedBadge', d.unverified, d.unverified ? 'alert' : ''], ['openAlerts', d.openAlerts, 'alert'], ['todayTasks', d.todayTasks], ['unassigned', d.unassigned], ['monthlyRevenue', `RM ${d.monthlyRevenue}`], ['dueTotal', `RM ${d.dueTotal}`], ['newEnquiries', d.newEnquiries]];
   return (
     <div>
       {open?.map(a => <div key={a.id} className="alert-banner" onClick={() => go('alerts')}>🚨 {a.client_name} · {t('a_' + a.type)} · {t('as_' + a.status)} · {fmtTime(a.created_at).slice(11)}</div>)}
@@ -175,7 +175,7 @@ function Clients() {
       {showNew && <ClientForm onSaved={() => { setShowNew(false); reload(); }} />}
       <div className="grid">{data?.map(c => (
         <div className="card" key={c.id} onClick={() => setSel(c.id)} style={{ cursor: 'pointer' }}>
-          <div className="row between"><b>{c.name}</b><Badge>{t('plan_' + c.plan)}</Badge></div>
+          <div className="row between"><b>{c.name}</b><span className="row">{c.verified === 0 && <Badge kind="new">{t('unverifiedBadge')}</Badge>}<Badge>{t('plan_' + c.plan)}</Badge></span></div>
           <div className="small muted">{c.region} · {c.birth_year} · ⌚ {c.watch_id || '-'}</div>
           <div className="small">{c.address}</div>
         </div>))}</div>
@@ -246,7 +246,9 @@ function ClientDetail({ id, back }: { id: number; back: () => void }) {
       {sub === 'info' && (edit ? <ClientForm c={c} onSaved={() => { setEdit(false); reload(); }} /> : (
         <>
           <div className="card">
-            <div className="row between"><h3>{c.name} · {c.gender} · {c.birth_year}</h3><div className="row"><Badge>{t('plan_' + c.plan)} RM{c.monthly_fee}</Badge><Btn v="sm ghost" onClick={() => setEdit(true)}>✏️ {t('edit')}</Btn></div></div>
+            {c.verified === 0 && <div className="unverified-banner"><b>{t('unverifiedTitle')}</b><p>{c.emergency_contact}</p>
+              <Btn v="ok sm" onClick={async () => { await api(`/clients/${id}`, { method: 'PATCH', body: { verified: 1 } }); reload(); }}>{t('confirmService')}</Btn></div>}
+            <div className="row between"><h3>{c.name} · {c.gender || ''} · {c.birth_year || ''}</h3><div className="row"><Badge>{t('plan_' + c.plan)} RM{c.monthly_fee}</Badge><Btn v="sm ghost" onClick={() => setEdit(true)}>✏️ {t('edit')}</Btn></div></div>
             <p className="small muted">{c.address} · <a href={mapsLink(c.address, c.lat, c.lng)} target="_blank" rel="noreferrer">📍</a> · ⌚ {c.watch_id || '-'} · {t('consent')}: {c.consent_at ? '✅' : '❌'}</p>
             <table className="tbl"><tbody>
               {[['conditions', h.conditions], ['meds', h.meds], ['allergies', h.allergies], ['doctor', h.doctor], ['mobility', h.mobility], ['langDiet', [h.language, h.diet].filter(Boolean).join(' / ')], ['healthNotes', h.notes], ['emergencyContact', c.emergency_contact], ['preferredHospital', c.preferred_hospital], ['notes', c.notes]].map(([k, v]) => <tr key={k as string}><th style={{ width: '32%' }}>{t(k as string)}</th><td>{v || '-'}</td></tr>)}
@@ -483,7 +485,9 @@ function Enquiries() {
       <div className="card"><h3>{t('enquiries')}</h3>{!data?.length && <Empty />}<div className="list">{data?.map(e => <div key={e.id} style={e.status === 'done' ? { opacity: .55 } : undefined}>
         <div className="row between"><b>{e.name} · <a href={waLink(e.phone)} target="_blank" rel="noreferrer">{e.phone}</a></b><span className="row small muted"><Badge kind={e.status === 'done' ? 'done' : 'new'}>{e.status === 'done' ? t('handled') : t('pendingBadge')}</Badge><Badge kind={e.source === 'register' ? '' : 'gray'}>{e.source === 'register' ? t('registeredBadge') : e.source === 'app' ? 'App' : 'Web'}</Badge>{fmtTime(e.created_at)}</span></div>
         <div className="small">{e.city} · {e.message}</div>
-        {e.status !== 'done' && e.user_id && <LinkRegistered e={e} clients={clients || []} onDone={reload} />}
+        {e.status !== 'done' && e.user_id && e.client_id && <div className="row small" style={{ marginTop: '.4rem' }}><Badge kind="new">{t('unverifiedBadge')}</Badge><span>{t('registeredParent')}：<b>{e.client_name}</b></span>
+          <Btn v="ok sm" onClick={async () => { await api(`/clients/${e.client_id}`, { method: 'PATCH', body: { verified: 1 } }); reload(); }}>{t('confirmService')}</Btn></div>}
+        {e.status !== 'done' && e.user_id && !e.client_id && <LinkRegistered e={e} clients={clients || []} onDone={reload} />}
         {e.status !== 'done' && !e.user_id && <Btn v="ghost sm" onClick={async () => { await api(`/enquiries/${e.id}`, { method: 'PATCH', body: { status: 'done' } }); reload(); }}>{t('markHandled')}</Btn>}
       </div>)}</div></div>
       <div className="card"><h3>{t('audit')}</h3><div className="tbl-wrap"><table className="tbl"><tbody>{audit?.slice(0, 50).map(a => <tr key={a.id}><td className="small muted">{fmtTime(a.at)}</td><td>{a.user_name}</td><td>{a.action}</td><td>{a.target}</td></tr>)}</tbody></table></div></div>

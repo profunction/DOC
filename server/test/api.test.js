@@ -146,23 +146,28 @@ test('app service application is stored with its source', async () => {
   assert.equal(e.source, 'app'); assert.equal(e.status, 'new');
 });
 
-test('self registration: logs in at once but sees nothing until the coordinator links them', async () => {
-  const bad = await j('/public/register', { body: { name: 'X', phone: '12', password: 'secret88' } });
-  assert.equal(bad.status, 400);
-  const r = (await j('/public/register', { body: { name: '自助注册者', phone: '0199990001', password: 'secret88', parent_name: '张伯伯', city: '古来', message: '爸爸 80 岁' } })).data;
+test('self registration: immediate access to the parent profile they created, nothing else; coordinator confirms', async () => {
+  assert.equal((await j('/public/register', { body: { name: 'X', phone: '0199990009', password: 'secret88', agree: true } })).data.error, 'parent_required');
+  assert.equal((await j('/public/register', { body: { name: 'X', phone: '0199990009', password: 'secret88', parent_name: 'P' } })).data.error, 'must_agree');
+  const r = (await j('/public/register', { body: { name: '自助注册者', phone: '0199990001', password: 'secret88', agree: true, parent_name: '张伯伯', relation: '儿子', parent_birth_year: 1946, city: '古来', address: 'Kulai Jaya', conditions: '高血压' } })).data;
   assert.ok(r.token); assert.equal(r.user.role, 'family');
-  assert.equal((await j('/public/register', { body: { name: '重复', phone: '0199990001', password: 'secret88' } })).data.error, 'phone_exists');
   const me = (await j('/me', {}, r.token)).data;
-  assert.deepEqual(me.client_ids, []);
-  assert.deepEqual((await j('/clients', {}, r.token)).data, []);
-  assert.equal((await j('/clients/1', {}, r.token)).status, 403);
-  assert.equal((await j('/alerts', { body: { client_id: 1, type: 'sos' } }, r.token)).status, 403);
+  assert.equal(me.client_ids.length, 1);
+  const cid = me.client_ids[0];
+  const c = (await j(`/clients/${cid}`, {}, r.token)).data;
+  assert.equal(c.name, '张伯伯'); assert.equal(c.verified, 0); assert.equal(c.health.conditions, '高血压'); assert.ok(c.consent_at);
+  assert.equal((await j('/clients/1', {}, r.token)).status, 403);                       // 看不到别人的父母
+  assert.equal((await j('/tasks', { body: { client_id: cid, type: 'visit', scheduled_at: '2030-01-01 10:00' } }, r.token)).status, 200);  // 马上可以预约
+  assert.equal((await j(`/clients/${cid}`, { method: 'PATCH', body: { address: 'Taman Kulai', plan: 'full', verified: 1 } }, r.token)).status, 200);
+  const c2 = (await j(`/clients/${cid}`, {}, r.token)).data;
+  assert.equal(c2.address, 'Taman Kulai'); assert.equal(c2.plan, 'standard'); assert.equal(c2.verified, 0);   // 子女不能改配套、不能自己确认
   const coord = await login('0100000001');
+  assert.ok((await j('/dashboard', {}, coord)).data.unverified >= 1);
   const e = (await j('/enquiries', {}, coord)).data.find(x => x.phone === '0199990001');
-  assert.equal(e.source, 'register'); assert.ok(e.user_id); assert.match(e.message, /张伯伯/);
-  assert.equal((await j('/clients/2/family', { body: { user_id: e.user_id, relation: '女儿' } }, coord)).status, 200);
-  assert.deepEqual((await j('/me', {}, r.token)).data.client_ids, [2]);
-  assert.equal((await j('/clients/2', {}, r.token)).status, 200);
+  assert.equal(e.client_id, cid); assert.equal(e.client_name, '张伯伯');
+  assert.equal((await j(`/clients/${cid}`, { method: 'PATCH', body: { verified: 1 } }, coord)).status, 200);
+  assert.equal((await j(`/clients/${cid}`, { method: 'PATCH', body: { address: 'x' } }, r.token)).status, 403);   // 确认后子女不能再改
   assert.equal((await j('/enquiries', {}, coord)).data.find(x => x.phone === '0199990001').status, 'done');
-  assert.ok((await j('/messages?client_id=2', {}, r.token)).data.some(m => m.text.includes('已加入')));
+  assert.ok((await j(`/messages?client_id=${cid}`, {}, r.token)).data.some(m => m.text.includes('正式开通')));
+  assert.equal((await j('/public/register', { body: { name: '重复', phone: '0199990001', password: 'secret88', agree: true, parent_name: 'P' } })).data.error, 'phone_exists');
 });
