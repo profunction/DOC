@@ -10,6 +10,7 @@ export interface User { id: number; phone: string; name: string; role: Role; lan
 interface Store {
   user: User | null; clientIds: number[]; hotline: string; ready: boolean;
   login: (phone: string, password: string) => Promise<User>;
+  setSession: (token: string) => Promise<void>;
   logout: () => void;
   onEvent: (h: Handler) => () => void;
   lastEvent: { event: string; data: any; n: number } | null;
@@ -62,6 +63,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await loadMe();
       return r.user;
     },
+    setSession: async (token) => { setToken(token); await loadMe(); },
     logout: () => { setToken(''); setUser(null); setClientIds([]); },
     onEvent: (h) => { handlers.current.add(h); return () => handlers.current.delete(h); },
   }), [user, clientIds, hotline, ready, lastEvent, eventSeq, loadMe]);

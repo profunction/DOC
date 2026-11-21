@@ -111,3 +111,37 @@ test('caregiver uploads a report photo; family can view it, strangers cannot', a
   const no = await fetch(B.replace(/\/api$/, '') + up.data.url, { headers: { authorization: `Bearer ${other}` } });
   assert.equal(no.status, 404);
 });
+
+test('coordinator invites a family member, who sets a password and logs in', async () => {
+  const coord = await login('0100000001');
+  const created = (await j('/users', { body: { phone: '0177770001', name: '新家属', role: 'family', client_id: 1, relation: '女儿' } }, coord)).data;
+  assert.ok(created.invite && created.invite.length === 10, 'invite code returned');
+  // 没有密码时无法登录
+  assert.equal((await j('/auth/login', { body: { phone: '0177770001', password: '' } })).status, 401);
+  const info = (await j(`/public/invite/${created.invite.toLowerCase()}`)).data;
+  assert.equal(info.name, '新家属'); assert.match(info.phone, /\*\*\*\*/);
+  assert.equal((await j(`/public/invite/${created.invite}`, { body: { password: '123' } })).status, 400);
+  const act = (await j(`/public/invite/${created.invite}`, { body: { password: 'secret88' } })).data;
+  assert.ok(act.token); assert.equal(act.user.role, 'family');
+  // 启用码只能用一次
+  assert.equal((await j(`/public/invite/${created.invite}`)).status, 404);
+  const tok = await (async () => (await j('/auth/login', { body: { phone: '0177770001', password: 'secret88' } })).data.token)();
+  assert.ok(tok);
+  assert.equal((await j('/clients/1', {}, tok)).status, 200);   // 已关联到陈阿婆
+  // 改密码
+  assert.equal((await j('/me/password', { body: { old_password: 'wrong', new_password: 'newpass99' } }, tok)).status, 400);
+  assert.equal((await j('/me/password', { body: { old_password: 'secret88', new_password: 'newpass99' } }, tok)).status, 200);
+  assert.ok((await j('/auth/login', { body: { phone: '0177770001', password: 'newpass99' } })).data.token);
+  // 重发启用链接会作废旧码
+  const r1 = (await j(`/users/${created.id}/invite`, { method: 'POST', body: {} }, coord)).data.invite;
+  const r2 = (await j(`/users/${created.id}/invite`, { method: 'POST', body: {} }, coord)).data.invite;
+  assert.equal((await j(`/public/invite/${r1}`)).status, 404);
+  assert.equal((await j(`/public/invite/${r2}`)).status, 200);
+});
+
+test('app service application is stored with its source', async () => {
+  assert.equal((await j('/public/enquiry', { body: { name: 'App 申请', phone: '0188880000', city: '士古来', source: 'app' } })).status, 200);
+  const coord = await login('0100000001');
+  const e = (await j('/enquiries', {}, coord)).data.find(x => x.phone === '0188880000');
+  assert.equal(e.source, 'app'); assert.equal(e.status, 'new');
+});

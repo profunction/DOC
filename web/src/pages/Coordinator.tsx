@@ -3,9 +3,9 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { statsChartOutline, alertCircleOutline, gitBranchOutline, peopleCircleOutline, documentTextOutline, peopleOutline, cardOutline, businessOutline, personAddOutline, mailOpenOutline } from 'ionicons/icons';
 import { useT } from '../i18n';
 import { useStore } from '../store';
-import { api, fmtTime, compressImage } from '../api';
+import { api, fmtTime, compressImage, getApiBase } from '../api';
 import { IonIcon } from '@ionic/react';
-import { cameraOutline, calendarOutline, addOutline, watchOutline } from 'ionicons/icons';
+import { cameraOutline, calendarOutline, addOutline, watchOutline, logoWhatsapp, copyOutline, refreshOutline } from 'ionicons/icons';
 import { Shell, useLoad, Badge, Field, Empty, TASK_TYPES, ALERT_TYPES, PARTNER_TYPES, PLANS, telLink, waLink, mapsLink, localDT, useErr, Btn } from '../components/ui';
 import { AlertCard, ReportCard, Chat, Team } from './Family';
 
@@ -390,38 +390,84 @@ function Aid() {
   );
 }
 
+/** 启用链接：协调员把它 WhatsApp 给顾客，顾客自己设密码 */
+function inviteLink(code: string) {
+  const base = getApiBase() || window.location.origin;
+  return `${base}/app/activate/${code}`;
+}
+function InviteBox({ name, phone, code, onClose }: { name: string; phone: string; code: string; onClose: () => void }) {
+  const { t } = useT();
+  const [copied, setCopied] = useState(false);
+  const link = inviteLink(code);
+  const apk = `${getApiBase() || window.location.origin}/downloads/anxin-care.apk`;
+  const msg = t('inviteMsg').replace('{name}', name).replace('{link}', link).replace('{phone}', phone).replace('{apk}', apk);
+  const pretty = code.replace(/(.{4})(.{4})(.{2})/, '$1-$2-$3');
+  async function copy() { try { await navigator.clipboard.writeText(msg); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* ignore */ } }
+  return (
+    <div className="invite-box">
+      <div className="row between"><b>{t('inviteReady')}：{name} · {phone}</b><Btn v="ghost sm" onClick={onClose}>{t('close')}</Btn></div>
+      <div className="code">{pretty}</div>
+      <div className="link">{link}</div>
+      <div className="row">
+        <Btn v="ok sm" href={waLink(phone, msg)} target="_blank" rel="noreferrer"><IonIcon slot="start" icon={logoWhatsapp} />{t('sendWhatsapp')}</Btn>
+        <Btn v="ghost sm" onClick={copy}><IonIcon slot="start" icon={copyOutline} />{copied ? t('copied') : t('copyLink')}</Btn>
+      </div>
+      <p className="small muted" style={{ marginTop: '.5rem', marginBottom: 0 }}>{t('inviteHint')}</p>
+    </div>
+  );
+}
+
 function Users() {
   const { t } = useT();
+  const { user: me } = useStore();
   const { data, reload } = useLoad<any[]>('/users');
   const { data: clients } = useLoad<any[]>('/clients');
-  const [f, setF] = useState<any>({ phone: '', name: '', role: 'family', password: '123456', client_id: '', relation: '', region: '' });
-  const [ok, setOk] = useState('');
+  const [f, setF] = useState<any>({ phone: '', name: '', role: 'family', password: '', client_id: '', relation: '', region: '' });
+  const [invite, setInvite] = useState<{ name: string; phone: string; code: string } | null>(null);
   const { Err, show } = useErr();
-  async function add(e: FormEvent) { e.preventDefault(); try { await api('/users', { body: { ...f, client_id: f.client_id ? Number(f.client_id) : null } }); setOk(`${t('created')}: ${f.name}`); setF({ ...f, phone: '', name: '' }); reload(); } catch (err) { show(err); } }
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    try {
+      const r = await api('/users', { body: { ...f, password: f.password || undefined, client_id: f.client_id ? Number(f.client_id) : null } });
+      if (r.invite) setInvite({ name: f.name, phone: f.phone, code: r.invite });
+      setF({ ...f, phone: '', name: '', password: '', relation: '' }); reload();
+    } catch (err) { show(err); }
+  }
+  async function resend(u: any) { try { const r = await api(`/users/${u.id}/invite`, { method: 'POST', body: {} }); setInvite({ name: u.name, phone: u.phone, code: r.invite }); window.scrollTo?.(0, 0); } catch (err) { show(err); } }
+  async function toggle(u: any) { try { await api(`/users/${u.id}`, { method: 'PATCH', body: { active: u.active ? 0 : 1 } }); reload(); } catch (err) { show(err); } }
   return (
     <div>
-      <div className="card"><h3>＋ {t('newUser')}</h3>{Err}{ok && <div className="success">{ok}</div>}<form onSubmit={add} className="form-grid">
-        <Field label={t('role')}><select value={f.role} onChange={e => setF({ ...f, role: e.target.value })}><option value="elder">{t('roleElder')}</option><option value="family">{t('roleFamily')}</option><option value="caregiver">{t('roleCaregiver')}</option><option value="coordinator">{t('roleCoordinator')}</option></select></Field>
+      {invite && <InviteBox {...invite} onClose={() => setInvite(null)} />}
+      <div className="card"><h3><IonIcon icon={addOutline} /> {t('newUser')}</h3>{Err}<form onSubmit={add} className="form-grid">
+        <Field label={t('role')}><select value={f.role} onChange={e => setF({ ...f, role: e.target.value })}><option value="family">{t('roleFamily')}</option><option value="elder">{t('roleElder')}</option><option value="caregiver">{t('roleCaregiver')}</option><option value="coordinator">{t('roleCoordinator')}</option></select></Field>
         <Field label={t('name')}><input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} required /></Field>
-        <Field label={t('phone')}><input value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} required /></Field>
-        <Field label={t('password')}><input value={f.password} onChange={e => setF({ ...f, password: e.target.value })} required /></Field>
-        {(f.role === 'elder' || f.role === 'family') && <Field label={t('clientForElder')}><select value={f.client_id} onChange={e => setF({ ...f, client_id: e.target.value })}><option value="">—</option>{clients?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>}
+        <Field label={t('phone')}><input inputMode="tel" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} required /></Field>
+        {(f.role === 'elder' || f.role === 'family') && <Field label={t('clientForElder')}><select value={f.client_id} onChange={e => setF({ ...f, client_id: e.target.value })} required><option value="">—</option>{clients?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>}
         {f.role === 'family' && <Field label={t('relation')}><input value={f.relation} onChange={e => setF({ ...f, relation: e.target.value })} /></Field>}
         {f.role === 'caregiver' && <Field label={t('region')}><input value={f.region} onChange={e => setF({ ...f, region: e.target.value })} /></Field>}
+        <Field label={t('passwordOptional')}><input value={f.password} onChange={e => setF({ ...f, password: e.target.value })} minLength={6} /></Field>
         <div className="field"><label>&nbsp;</label><Btn v="">{t('save')}</Btn></div></form></div>
-      <div className="card tbl-wrap"><table className="tbl"><thead><tr><th>{t('role')}</th><th>{t('name')}</th><th>{t('phone')}</th><th>{t('region')}</th></tr></thead>
-        <tbody>{data?.map(u => <tr key={u.id}><td><Badge>{t('role' + u.role[0].toUpperCase() + u.role.slice(1))}</Badge></td><td>{u.name}</td><td>{u.phone}</td><td>{u.region || (u.client_id ? `#${u.client_id}` : '')}</td></tr>)}</tbody></table></div>
+      <div className="card tbl-wrap"><table className="tbl"><thead><tr><th>{t('role')}</th><th>{t('name')}</th><th>{t('phone')}</th><th>{t('region')}</th><th>{t('actions')}</th></tr></thead>
+        <tbody>{data?.map(u => <tr key={u.id} style={u.active ? undefined : { opacity: .5 }}>
+          <td><Badge>{t('role' + u.role[0].toUpperCase() + u.role.slice(1))}</Badge></td><td>{u.name}</td><td>{u.phone}</td><td>{u.region || (u.client_id ? clients?.find(c => c.id === u.client_id)?.name || `#${u.client_id}` : '')}</td>
+          <td><div className="row">{u.active ? <Btn v="ghost sm" onClick={() => resend(u)}><IonIcon slot="start" icon={refreshOutline} />{t('resendInvite')}</Btn> : null}
+            {u.id !== me?.id && <Btn v="ghost sm" onClick={() => toggle(u)}>{u.active ? t('disableUser') : t('enableUser')}</Btn>}</div></td>
+        </tr>)}</tbody></table></div>
     </div>
   );
 }
 
 function Enquiries() {
   const { t } = useT();
-  const { data } = useLoad<any[]>('/enquiries');
+  const { data, reload } = useLoad<any[]>('/enquiries');
   const { data: audit } = useLoad<any[]>('/audit');
   return (
     <div>
-      <div className="card"><h3>{t('enquiries')}</h3>{!data?.length && <Empty />}<div className="list">{data?.map(e => <div key={e.id}><div className="row between"><b>{e.name} · <a href={waLink(e.phone)} target="_blank" rel="noreferrer">{e.phone}</a></b><span className="small muted">{fmtTime(e.created_at)}</span></div><div className="small">{e.city} · {e.message}</div></div>)}</div></div>
+      <div className="card"><h3>{t('enquiries')}</h3>{!data?.length && <Empty />}<div className="list">{data?.map(e => <div key={e.id} style={e.status === 'done' ? { opacity: .55 } : undefined}>
+        <div className="row between"><b>{e.name} · <a href={waLink(e.phone)} target="_blank" rel="noreferrer">{e.phone}</a></b><span className="row small muted"><Badge kind={e.status === 'done' ? 'done' : 'new'}>{e.status === 'done' ? t('handled') : t('as_new')}</Badge><Badge kind="gray">{e.source === 'app' ? 'App' : 'Web'}</Badge>{fmtTime(e.created_at)}</span></div>
+        <div className="small">{e.city} · {e.message}</div>
+        {e.status !== 'done' && <Btn v="ghost sm" onClick={async () => { await api(`/enquiries/${e.id}`, { method: 'PATCH', body: { status: 'done' } }); reload(); }}>{t('markHandled')}</Btn>}
+      </div>)}</div></div>
       <div className="card"><h3>{t('audit')}</h3><div className="tbl-wrap"><table className="tbl"><tbody>{audit?.slice(0, 50).map(a => <tr key={a.id}><td className="small muted">{fmtTime(a.at)}</td><td>{a.user_name}</td><td>{a.action}</td><td>{a.target}</td></tr>)}</tbody></table></div></div>
     </div>
   );

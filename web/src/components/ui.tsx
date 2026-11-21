@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type CSSProperties, type MouseEvent } from 'react';
 import { IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonIcon, IonLabel, IonPage, IonSegment, IonSegmentButton, IonTabBar, IonTabButton, IonTitle, IonToolbar } from '@ionic/react';
-import { logOutOutline } from 'ionicons/icons';
+import { logOutOutline, keyOutline } from 'ionicons/icons';
+import { IonModal } from '@ionic/react';
 import { useT, LANGS, type Lang } from '../i18n';
 import { useStore } from '../store';
 import { api, ApiError } from '../api';
@@ -28,6 +29,7 @@ export function Shell({ title, tabs, tab, onTab, children, right }: { title: str
             <span className="topbar-user">{user?.name}</span>
             {right}
             <LangSelect light />
+            <ChangePasswordButton />
             <IonButton onClick={logout} title="logout"><IonIcon slot="icon-only" icon={logOutOutline} /></IonButton>
           </IonButtons>
         </IonToolbar>
@@ -64,7 +66,7 @@ export function useErr() {
   const { t } = useT();
   const [err, setErr] = useState('');
   const show = (e: any) => {
-    if (e instanceof ApiError) setErr(e.code === 'network' ? t('networkError') : e.code === 'no_server' ? t('serverRequired') : e.code === 'not_configured' ? t('notConfigured') : e.code === 'not_api' ? t('notApi') : e.code === 'bad_credentials' ? t('badCredentials') : e.code === 'forbidden' ? t('forbidden') : `${e.status} ${e.code}`);
+    if (e instanceof ApiError) setErr(e.code === 'network' ? t('networkError') : e.code === 'no_server' ? t('serverRequired') : e.code === 'not_configured' ? t('notConfigured') : e.code === 'not_api' ? t('notApi') : e.code === 'bad_credentials' ? t('badCredentials') : e.code === 'invite_invalid' ? t('inviteInvalid') : e.code === 'password_too_short' ? t('passwordTooShort') : e.code === 'too_many_attempts' ? t('tooMany') : e.code === 'bad_old_password' ? t('badOldPassword') : e.code === 'phone_exists' ? t('phoneExists') : e.code === 'forbidden' ? t('forbidden') : `${e.status} ${e.code}`);
     else setErr(String(e?.message || e));
   };
   return { err, setErr, show, Err: err ? <div className="error">{err}</div> : null };
@@ -122,4 +124,38 @@ export function localDT(offsetDays = 0, h = 10) {
   const d = new Date(); d.setDate(d.getDate() + offsetDays); d.setHours(h, 0, 0, 0);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** 顶栏的"修改密码" */
+export function ChangePasswordButton({ light = true }: { light?: boolean }) {
+  const { t } = useT();
+  const [open, setOpen] = useState(false);
+  const [oldPw, setOld] = useState(''); const [pw, setPw] = useState(''); const [pw2, setPw2] = useState('');
+  const [ok, setOk] = useState(false); const [busy, setBusy] = useState(false);
+  const { Err, show, setErr } = useErr();
+  async function save(e: any) {
+    e.preventDefault(); setErr(''); setOk(false);
+    if (pw !== pw2) { setErr(t('passwordMismatch')); return; }
+    setBusy(true);
+    try { await api('/me/password', { body: { old_password: oldPw, new_password: pw } }); setOk(true); setOld(''); setPw(''); setPw2(''); } catch (err) { show(err); } finally { setBusy(false); }
+  }
+  return (
+    <>
+      <IonButton onClick={() => { setOpen(true); setOk(false); setErr(''); }} title={t('changePassword')} color={light ? undefined : 'medium'} fill={light ? undefined : 'outline'} size={light ? undefined : 'small'}>
+        <IonIcon slot={light ? 'icon-only' : 'start'} icon={keyOutline} />{light ? null : t('changePassword')}
+      </IonButton>
+      <IonModal isOpen={open} onDidDismiss={() => setOpen(false)}>
+        <div className="ion-padding" style={{ maxWidth: 460, margin: '0 auto', width: '100%' }}>
+          <h2 style={{ marginTop: '1rem' }}>{t('changePassword')}</h2>
+          {Err}{ok && <div className="success">{t('passwordChanged')}</div>}
+          <form onSubmit={save}>
+            <div className="field"><label>{t('oldPassword')}</label><input type="password" autoComplete="current-password" value={oldPw} onChange={e => setOld(e.target.value)} required /></div>
+            <div className="field"><label>{t('newPassword')}</label><input type="password" autoComplete="new-password" minLength={6} value={pw} onChange={e => setPw(e.target.value)} required /></div>
+            <div className="field"><label>{t('confirmPassword')}</label><input type="password" autoComplete="new-password" minLength={6} value={pw2} onChange={e => setPw2(e.target.value)} required /></div>
+            <div className="row"><Btn v="" disabled={busy}>{t('save')}</Btn><Btn v="ghost" onClick={() => setOpen(false)}>{t('close')}</Btn></div>
+          </form>
+        </div>
+      </IonModal>
+    </>
+  );
 }

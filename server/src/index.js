@@ -16,10 +16,19 @@ ensureAdmin();
 
 const app = express();
 app.disable('x-powered-by');
+app.set('trust proxy', 1);   // Render / Caddy 在前面，用 X-Forwarded-For 取真实 IP
 app.use(cors());
 app.use(express.json({ limit: '6mb' }));
 app.use('/api', api);
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: 'server_error' }); });
+
+// Android App Links：让启用链接直接打开已安装的 App（指纹来自正式签名证书）
+const ANDROID_PACKAGE = process.env.ANDROID_PACKAGE || 'my.anxincare.app';
+const ANDROID_CERT_SHA256 = (process.env.ANDROID_CERT_SHA256 || '2E:96:AD:8A:21:59:AE:C1:13:2E:50:05:14:B4:2D:76:01:11:7C:2B:26:5F:23:0A:E9:88:08:19:6A:77:6F:71').split(',').map(x => x.trim()).filter(Boolean);
+app.get('/.well-known/assetlinks.json', (req, res) => res.json([{
+  relation: ['delegate_permission/common.handle_all_urls'],
+  target: { namespace: 'android_app', package_name: ANDROID_PACKAGE, sha256_cert_fingerprints: ANDROID_CERT_SHA256 },
+}]));
 
 // APK 等下载文件单独提供（不放进 web/public，否则会被打进 App 自己）
 if (fs.existsSync(DOWNLOADS_DIR)) app.use('/downloads', express.static(DOWNLOADS_DIR, { maxAge: '5m' }));

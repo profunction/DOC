@@ -1,4 +1,6 @@
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { App as CapApp } from '@capacitor/app';
 import { IonApp } from '@ionic/react';
 import { useStore } from './store';
 import { isNative } from './api';
@@ -33,6 +35,9 @@ function AppShell() {
       <Routes>
         <Route index element={<AppHome />} />
         <Route path="login" element={<Login />} />
+        <Route path="apply" element={<Login initialMode="apply" />} />
+        <Route path="activate" element={<Login initialMode="activate" />} />
+        <Route path="activate/:code" element={<Login />} />
         <Route path="elder" element={<Guard role="elder"><Elder /></Guard>} />
         <Route path="family" element={<Guard role="family"><Family /></Guard>} />
         <Route path="coord" element={<Guard role="coordinator"><Coordinator /></Guard>} />
@@ -45,6 +50,13 @@ function AppShell() {
 
 export default function App() {
   const loc = useLocation();
+  const nav = useNavigate();
+  // 从 WhatsApp 点启用链接时，Android 会把链接交给 App
+  useEffect(() => {
+    if (!isNative) return;
+    const h = CapApp.addListener('appUrlOpen', ({ url }) => { try { const u = new URL(url); if (u.pathname.startsWith('/app/')) nav(u.pathname, { replace: true }); } catch { /* ignore */ } });
+    return () => { h.then(x => x.remove()); };
+  }, [nav]);
   // 手机 App 里不显示宣传网站，直接进入应用
   if (isNative && (loc.pathname === '/' || loc.pathname === '')) return <Navigate to="/app" replace />;
   return (

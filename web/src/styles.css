@@ -221,3 +221,11 @@ ion-button + ion-button { margin-left: 0; }
 .card h3 ion-icon { vertical-align: -0.15em; color: var(--brand); margin-right: .15rem; }
 .vitals span { display: inline-flex; align-items: center; gap: .25rem; }
 .vitals ion-icon { color: var(--brand); }
+
+/* 登录页的申请 / 启用入口 */
+.login-actions { display: grid; gap: .5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.login-links { margin-top: 1rem; font-size: .9rem; }
+.login-links a { cursor: pointer; color: var(--brand); }
+.invite-box { border: 2px solid var(--brand); background: var(--brand-soft); border-radius: 12px; padding: 1rem; margin-bottom: .85rem; }
+.invite-box .code { font-size: 1.6rem; font-weight: 800; letter-spacing: .2em; color: var(--brand); }
+.invite-box .link { word-break: break-all; font-size: .85rem; background: #fff; border-radius: 8px; padding: .5rem .6rem; margin: .5rem 0; }

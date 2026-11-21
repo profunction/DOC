@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { IonContent, IonPage } from '@ionic/react';
 import { useT } from '../i18n';
 import { useStore } from '../store';
@@ -11,10 +11,12 @@ const DEMO = [
   { role: 'roleCoordinator', phone: '0100000001' }, { role: 'roleCaregiver', phone: '0100000002' },
 ];
 
-export default function Login() {
-  const { t } = useT();
-  const { login } = useStore();
+export default function Login({ initialMode }: { initialMode?: 'login' | 'apply' | 'activate' }) {
+  const { t, lang } = useT();
+  const { login, setSession } = useStore();
   const nav = useNavigate();
+  const params = useParams();
+  const [mode, setMode] = useState<'login' | 'apply' | 'activate'>(initialMode || (params.code ? 'activate' : 'login'));
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [server, setServer] = useState(getApiBase());
@@ -45,6 +47,37 @@ export default function Login() {
     } catch (err) { show(err); } finally { setBusy(false); }
   }
 
+  // ---- 申请服务 ----
+  const [ap, setAp] = useState({ name: '', phone: '', city: '', message: '' });
+  const [applied, setApplied] = useState(false);
+  async function apply(e: FormEvent) {
+    e.preventDefault(); setErr(''); setBusy(true);
+    try {
+      if (isNative && !getApiBase()) throw new ApiError(0, 'not_configured');
+      await api('/public/enquiry', { body: { ...ap, lang, source: 'app' }, auth: false }); setApplied(true);
+    } catch (err) { show(err); } finally { setBusy(false); }
+  }
+  // ---- 启用账号 ----
+  const [code, setCode] = useState(String(params.code || ''));
+  const [inv, setInv] = useState<{ name: string; phone: string; role: string } | null>(null);
+  const [pw1, setPw1] = useState(''); const [pw2, setPw2] = useState('');
+  async function checkCode(e?: FormEvent) {
+    e?.preventDefault(); setErr(''); setBusy(true);
+    try { setInv(await api(`/public/invite/${encodeURIComponent(code.trim())}`, { auth: false })); } catch (err) { show(err); } finally { setBusy(false); }
+  }
+  useEffect(() => { if (params.code) checkCode(); }, [params.code]);
+  async function activate(e: FormEvent) {
+    e.preventDefault(); setErr('');
+    if (pw1 !== pw2) { setErr(t('passwordMismatch')); return; }
+    setBusy(true);
+    try {
+      const r = await api(`/public/invite/${encodeURIComponent(code.trim())}`, { body: { password: pw1 }, auth: false });
+      await setSession(r.token);
+      nav('/app', { replace: true });
+    } catch (err) { show(err); } finally { setBusy(false); }
+  }
+  const go = (m: 'login' | 'apply' | 'activate') => { setErr(''); setMode(m); };
+
   return (
     <IonPage><IonContent><div style={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
       <div className="card login-card" style={{ width: '100%', maxWidth: 420 }}>
@@ -52,6 +85,40 @@ export default function Login() {
           <div className="row" onClick={tapLogo} style={{ cursor: 'default' }}><img src="/icon.svg" alt="" width={36} height={36} /><div><b>{t('appName')}</b><div className="small muted">{t('tagline')}</div></div></div>
           <LangSelect />
         </div>
+        {mode === 'apply' && <>
+          <h2>{t('applyTitle')}</h2>
+          {Err}
+          {applied ? <div className="success">{t('applySent')}</div> : <>
+            <p className="small muted">{t('applyIntro')}</p>
+            <form onSubmit={apply}>
+              <div className="field"><label>{t('yourName')}</label><input value={ap.name} onChange={e => setAp({ ...ap, name: e.target.value })} required maxLength={80} /></div>
+              <div className="field"><label>{t('yourPhone')}</label><input inputMode="tel" value={ap.phone} onChange={e => setAp({ ...ap, phone: e.target.value })} required maxLength={30} /></div>
+              <div className="field"><label>{t('parentArea')}</label><input value={ap.city} onChange={e => setAp({ ...ap, city: e.target.value })} placeholder="新山市区 / 士古来 / 古来 …" /></div>
+              <div className="field"><label>{t('yourMessage')}</label><textarea value={ap.message} onChange={e => setAp({ ...ap, message: e.target.value })} maxLength={1000} /></div>
+              <Btn v="block" disabled={busy}>{busy ? t('loading') : t('submit')}</Btn>
+            </form></>}
+          <p className="login-links"><a onClick={() => go('login')}>← {t('backToLogin')}</a></p>
+        </>}
+
+        {mode === 'activate' && <>
+          <h2>{t('activateTitle')}</h2>
+          {Err}
+          {!inv ? <>
+            <p className="small muted">{t('activateIntro')}</p>
+            <form onSubmit={checkCode}>
+              <div className="field"><label>{t('inviteCode')}</label><input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="ABCD-EFGH-JK" autoCapitalize="characters" required style={{ letterSpacing: '.15em', fontWeight: 700 }} /></div>
+              <Btn v="block" disabled={busy}>{busy ? t('loading') : t('checkCode')}</Btn>
+            </form></> : <>
+            <div className="success">{t('activateFor')}：<b>{inv.name}</b> · {inv.phone}</div>
+            <form onSubmit={activate}>
+              <div className="field"><label>{t('newPassword')}</label><input type="password" autoComplete="new-password" minLength={6} value={pw1} onChange={e => setPw1(e.target.value)} required /></div>
+              <div className="field"><label>{t('confirmPassword')}</label><input type="password" autoComplete="new-password" minLength={6} value={pw2} onChange={e => setPw2(e.target.value)} required /></div>
+              <Btn v="block" disabled={busy}>{busy ? t('loading') : t('activate')}</Btn>
+            </form></>}
+          <p className="login-links"><a onClick={() => { go('login'); setInv(null); }}>← {t('backToLogin')}</a></p>
+        </>}
+
+        {mode === 'login' && <>
         <h2>{t('login')}</h2>
         {notConfigured && !showServer && <div className="error">{t('notConfigured')}</div>}
         {Err}
@@ -64,6 +131,10 @@ export default function Login() {
             <p className="small muted" style={{ marginTop: '.3rem' }}>{t('serverHint')}</p></div>}
           <Btn v="block" disabled={busy}>{busy ? t('loading') : t('login')}</Btn>
         </form>
+        <div className="login-actions">
+          <Btn v="secondary block" onClick={() => go('apply')}>{t('applyService')}</Btn>
+          <Btn v="ghost block" onClick={() => go('activate')}>{t('haveCode')}</Btn>
+        </div>
         {!isNative && <p className="small muted" style={{ marginTop: '.8rem' }}><Link to="/">← {t('tagline')}</Link></p>}
         {showServer && <p className="small muted">{BUILT_IN ? `${t('serverUrl')}: ${import.meta.env.VITE_API_BASE}` : ''}</p>}
         {demo && <details style={{ marginTop: '.6rem' }}>
@@ -72,6 +143,7 @@ export default function Login() {
             {DEMO.map(d => <Btn key={d.phone} type="button" v="ghost sm block" onClick={() => { setPhone(d.phone); setPassword('123456'); }}>{t(d.role)} · {d.phone}</Btn>)}
           </div>
         </details>}
+        </>}
       </div>
     </div></IonContent></IonPage>
   );

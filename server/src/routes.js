@@ -5,6 +5,7 @@ import { sign, requireAuth, requireRole, clientIdsFor, canSeeClient } from './au
 import { subscribe, broadcastClient } from './events.js';
 import { pushNtfy, traccarHandler, integrationStatus } from './integrations.js';
 import { uploads } from './uploads.js';
+import { createInvite, findInvite, useInvite, unusablePasswordHash, maskPhone, rateLimit, failures } from './accounts.js';
 
 export const api = Router();
 const pub = Router();
@@ -12,6 +13,8 @@ const pub = Router();
 db.exec(`CREATE TABLE IF NOT EXISTS enquiries (
   id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, phone TEXT, city TEXT, message TEXT, lang TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')))`);
+try { db.exec(`ALTER TABLE enquiries ADD COLUMN source TEXT`); } catch { /* 已存在 */ }
+try { db.exec(`ALTER TABLE enquiries ADD COLUMN status TEXT NOT NULL DEFAULT 'new'`); } catch { /* 已存在 */ }
 
 const HOTLINE = process.env.HOTLINE_PHONE || '60123456789';
 
@@ -50,16 +53,33 @@ pub.get('/info', (req, res) => {
     ],
   });
 });
-pub.post('/enquiry', (req, res) => {
-  const { name, phone, city, message, lang } = req.body || {};
+pub.post('/enquiry', rateLimit('enquiry', 10), (req, res) => {
+  const { name, phone, city, message, lang, source } = req.body || {};
   if (!phone || !name) return res.status(400).json({ error: 'name_phone_required' });
-  db.prepare('INSERT INTO enquiries (name, phone, city, message, lang) VALUES (?,?,?,?,?)').run(name, phone, city || null, message || null, lang || 'zh');
+  db.prepare('INSERT INTO enquiries (name, phone, city, message, lang, source) VALUES (?,?,?,?,?,?)').run(String(name).slice(0, 80), String(phone).slice(0, 30), city ? String(city).slice(0, 80) : null, message ? String(message).slice(0, 1000) : null, lang || 'zh', source === 'app' ? 'app' : 'web');
+  pushNtfy({ title: `📥 新的服务申请：${name}`, message: `${phone}${city ? ' · ' + city : ''}${message ? '\n' + message : ''}`, priority: 'default', tags: ['inbox_tray'] });
   res.json({ ok: true });
 });
+
+// 顾客用启用码设密码
+pub.get('/invite/:code', rateLimit('invite', 20), (req, res) => {
+  const inv = findInvite(req.params.code);
+  if (!inv) return res.status(404).json({ error: 'invite_invalid' });
+  res.json({ name: inv.name, phone: maskPhone(inv.phone), role: inv.role, expires_at: inv.expires_at });
+});
+pub.post('/invite/:code', rateLimit('invite', 20), (req, res) => {
+  const pw = String(req.body?.password || '');
+  if (pw.length < 6) return res.status(400).json({ error: 'password_too_short' });
+  const u = useInvite(req.params.code, pw);
+  if (!u) return res.status(404).json({ error: 'invite_invalid' });
+  res.json({ token: sign(u), user: safeUser(u) });
+});
 api.post('/auth/login', (req, res) => {
+  if (failures.blocked('login', req, 10)) return res.status(429).json({ error: 'too_many_attempts' });
   const { phone, password } = req.body || {};
   const u = db.prepare('SELECT * FROM users WHERE phone = ? AND active = 1').get(String(phone || '').trim());
-  if (!u || !bcrypt.compareSync(String(password || ''), u.password_hash)) return res.status(401).json({ error: 'bad_credentials' });
+  if (!u || !bcrypt.compareSync(String(password || ''), u.password_hash)) { failures.hit('login', req); return res.status(401).json({ error: 'bad_credentials' }); }
+  failures.clear('login', req);
   audit(u.id, 'login');
   res.json({ token: sign(u), user: safeUser(u) });
 });
@@ -78,6 +98,15 @@ api.patch('/me', (req, res) => {
   const { lang, name } = req.body || {};
   if (lang) db.prepare('UPDATE users SET lang = ? WHERE id = ?').run(lang, req.user.id);
   if (name) db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, req.user.id);
+  res.json({ ok: true });
+});
+api.post('/me/password', (req, res) => {
+  const { old_password, new_password } = req.body || {};
+  const u = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
+  if (!bcrypt.compareSync(String(old_password || ''), u.password_hash)) return res.status(400).json({ error: 'bad_old_password' });
+  if (String(new_password || '').length < 6) return res.status(400).json({ error: 'password_too_short' });
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(String(new_password), 10), req.user.id);
+  audit(req.user.id, 'change_password');
   res.json({ ok: true });
 });
 api.get('/events', (req, res) => subscribe(req.user, res));
@@ -357,15 +386,34 @@ api.get('/users', requireRole('coordinator'), (req, res) => {
 });
 api.post('/users', requireRole('coordinator'), (req, res) => {
   const b = req.body || {};
-  if (!b.phone || !b.name || !b.role || !b.password) return res.status(400).json({ error: 'missing' });
+  if (!b.phone || !b.name || !b.role) return res.status(400).json({ error: 'missing' });
+  if (!['elder', 'family', 'coordinator', 'caregiver'].includes(b.role)) return res.status(400).json({ error: 'bad_role' });
   try {
+    const hash = b.password ? bcrypt.hashSync(String(b.password), 10) : unusablePasswordHash();
     const r = db.prepare('INSERT INTO users (phone, password_hash, name, role, lang, client_id, region) VALUES (?,?,?,?,?,?,?)')
-      .run(String(b.phone).trim(), bcrypt.hashSync(String(b.password), 10), b.name, b.role, b.lang || 'zh', b.client_id || null, b.region || null);
+      .run(String(b.phone).trim(), hash, b.name, b.role, b.lang || 'zh', b.role === 'elder' ? (b.client_id || null) : null, b.region || null);
     if (b.role === 'family' && b.client_id) db.prepare('INSERT OR IGNORE INTO family_links (user_id, client_id, relation) VALUES (?,?,?)').run(r.lastInsertRowid, b.client_id, b.relation || null);
-    res.json({ id: r.lastInsertRowid });
+    const invite = b.password ? null : createInvite(Number(r.lastInsertRowid), req.user.id);
+    res.json({ id: r.lastInsertRowid, invite });
   } catch (e) {
     res.status(400).json({ error: /UNIQUE/.test(String(e)) ? 'phone_exists' : 'db_error' });
   }
+});
+api.post('/users/:id/invite', requireRole('coordinator'), (req, res) => {
+  const u = db.prepare('SELECT id, name, phone FROM users WHERE id = ? AND active = 1').get(Number(req.params.id));
+  if (!u) return res.status(404).json({ error: 'not_found' });
+  res.json({ invite: createInvite(u.id, req.user.id), name: u.name, phone: u.phone });
+});
+api.patch('/users/:id', requireRole('coordinator'), (req, res) => {
+  const id = Number(req.params.id);
+  if (id === req.user.id && req.body?.active === 0) return res.status(400).json({ error: 'cannot_disable_self' });
+  if (req.body?.active !== undefined) db.prepare('UPDATE users SET active = ? WHERE id = ?').run(req.body.active ? 1 : 0, id);
+  if (req.body?.name) db.prepare('UPDATE users SET name = ? WHERE id = ?').run(String(req.body.name), id);
+  res.json({ ok: true });
+});
+api.patch('/enquiries/:id', requireRole('coordinator'), (req, res) => {
+  db.prepare('UPDATE enquiries SET status = ? WHERE id = ?').run(req.body?.status === 'done' ? 'done' : 'new', Number(req.params.id));
+  res.json({ ok: true });
 });
 api.post('/clients/:id/family', requireRole('coordinator'), (req, res) => {
   const u = db.prepare(`SELECT id FROM users WHERE phone = ? AND role = 'family'`).get(String(req.body?.phone || '').trim());
