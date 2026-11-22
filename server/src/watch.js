@@ -70,9 +70,10 @@ export function handlePosition(body) {
     lat: pos.latitude ?? null, lng: pos.longitude ?? null, speed: pos.speed ?? null,
     battery: battery == null ? null : Math.round(Number(battery)), heart_rate: hr == null ? null : Math.round(Number(hr)), steps: a.steps ?? null,
     fix_time: pos.fixTime || pos.deviceTime || null,
+    accuracy: pos.accuracy != null ? Math.round(Number(pos.accuracy)) : (a.hdop ? Math.round(Number(a.hdop) * 5) : null),   // 米；LBS / WiFi 定位时 Traccar 会给 accuracy
   };
-  db.prepare(`INSERT INTO watch_positions (client_id, watch_id, lat, lng, speed, battery, heart_rate, steps, fix_time, raw) VALUES (?,?,?,?,?,?,?,?,?,?)`)
-    .run(client.id, String(watchId), rec.lat, rec.lng, rec.speed, rec.battery, rec.heart_rate, rec.steps, rec.fix_time, JSON.stringify(body).slice(0, 4000));
+  db.prepare(`INSERT INTO watch_positions (client_id, watch_id, lat, lng, speed, battery, heart_rate, steps, fix_time, raw, accuracy) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(client.id, String(watchId), rec.lat, rec.lng, rec.speed, rec.battery, rec.heart_rate, rec.steps, rec.fix_time, JSON.stringify(body).slice(0, 4000), rec.accuracy);
   // 保留最近 2000 条
   db.prepare(`DELETE FROM watch_positions WHERE client_id = ? AND id < (SELECT id FROM watch_positions WHERE client_id = ? ORDER BY id DESC LIMIT 1 OFFSET 2000)`).run(client.id, client.id);
 
@@ -131,11 +132,11 @@ export function scheduleOfflineCheck() {
 export function watchSummary(clientId) {
   const c = db.prepare('SELECT id, name, watch_id, watch_last_seen, watch_battery, watch_status, safe_lat, safe_lng, safe_radius, hr_min, hr_max, lat, lng FROM clients WHERE id = ?').get(clientId);
   if (!c) return null;
-  const last = db.prepare('SELECT lat, lng, speed, battery, heart_rate, steps, fix_time, received_at FROM watch_positions WHERE client_id = ? ORDER BY id DESC LIMIT 1').get(clientId) || null;
+  const last = db.prepare('SELECT lat, lng, speed, battery, heart_rate, steps, fix_time, received_at, accuracy FROM watch_positions WHERE client_id = ? ORDER BY id DESC LIMIT 1').get(clientId) || null;
   const offline = c.watch_last_seen ? (Date.now() - new Date(c.watch_last_seen.replace(' ', 'T') + 'Z').getTime()) > OFFLINE_HOURS * 3600e3 : true;
   return { ...c, last, offline, offline_hours: OFFLINE_HOURS, low_battery: LOW_BATTERY };
 }
 export function watchTrail(clientId, hours = 24) {
-  return db.prepare(`SELECT lat, lng, battery, heart_rate, fix_time, received_at FROM watch_positions WHERE client_id = ? AND received_at > datetime('now', ?) AND lat IS NOT NULL ORDER BY id DESC LIMIT 500`).all(clientId, `-${hours} hours`);
+  return db.prepare(`SELECT lat, lng, battery, heart_rate, fix_time, received_at, accuracy FROM watch_positions WHERE client_id = ? AND received_at > datetime('now', ?) AND lat IS NOT NULL ORDER BY id DESC LIMIT 500`).all(clientId, `-${hours} hours`);
 }
 export { audit };

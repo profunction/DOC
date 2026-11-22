@@ -12,17 +12,17 @@ import { telLink, waLink, Btn } from '../components/ui';
 
 type Sheet = null | 'sos' | 'find' | 'plan' | 'setup';
 
-async function getPosition(): Promise<{ lat?: number; lng?: number }> {
+async function getPosition(): Promise<{ lat?: number; lng?: number; accuracy?: number }> {
   try {
     if (isNative) {
       const p = await Geolocation.requestPermissions().catch(() => null);
       if (!p || p.location === 'denied') return {};
       const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 8000 });
-      return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      return { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: Math.round(pos.coords.accuracy || 0) };
     }
     return await new Promise(res => {
       if (!navigator.geolocation) return res({});
-      navigator.geolocation.getCurrentPosition(p => res({ lat: p.coords.latitude, lng: p.coords.longitude }), () => res({}), { enableHighAccuracy: true, timeout: 8000 });
+      navigator.geolocation.getCurrentPosition(p => res({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: Math.round(p.coords.accuracy || 0) }), () => res({}), { enableHighAccuracy: true, timeout: 8000 });
     });
   } catch { return {}; }
 }
@@ -34,7 +34,7 @@ export default function Elder() {
   const [sosState, setSosState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
   const [alertId, setAlertId] = useState<number | null>(null);
   const [alertStatus, setAlertStatus] = useState<string>('new');
-  const [lastPos, setLastPos] = useState<{ lat?: number; lng?: number }>({});
+  const [lastPos, setLastPos] = useState<{ lat?: number; lng?: number; accuracy?: number }>({});
   const [summary, setSummary] = useState<any>(null);
   const [hold, setHold] = useState(0);
   const holdTimer = useRef<number | null>(null);

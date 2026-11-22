@@ -113,8 +113,8 @@ export function AlertCard({ a, children }: { a: any; children?: any }) {
     <div className="card">
       <div className="row between"><b>{t('a_' + a.type)} · {a.client_name || ''}</b><Badge kind={a.status}>{t('as_' + a.status)}</Badge></div>
       <div className="small muted">{niceTime(a.created_at)} · {t('alertSource')}: {a.source} {a.severity && <>· <Badge kind={a.severity}>{t('severity' + a.severity[0].toUpperCase() + a.severity.slice(1))}</Badge></>}</div>
-      {a.lat && a.status !== 'resolved' && <MapView alertAt={{ lat: a.lat, lng: a.lng, label: `${t('a_' + a.type)} ${niceTime(a.created_at)}` }} height={180} zoom={16} />}
-      {a.lat && <a className="small" href={mapsLink(null, a.lat, a.lng)} target="_blank" rel="noreferrer">📍 {t('openMap')} · {a.lat.toFixed(4)}, {a.lng.toFixed(4)}</a>}
+      {a.lat && a.status !== 'resolved' && <MapView alertAt={{ lat: a.lat, lng: a.lng, accuracy: a.accuracy, label: `${t('a_' + a.type)} ${niceTime(a.created_at)}` }} height={180} zoom={16} />}
+      {a.lat && <a className="small" href={mapsLink(null, a.lat, a.lng)} target="_blank" rel="noreferrer">📍 {t('openMap')} · {a.lat.toFixed(5)}, {a.lng.toFixed(5)}{a.accuracy ? ` · ±${Math.round(a.accuracy)} m` : ''}</a>}
       {a.description && <p className="small" style={{ marginTop: '.3rem' }}>{a.description}</p>}
       <ul className="timeline" style={{ marginTop: '.6rem' }}>{(a.steps || []).map((s: any, i: number) => <li key={i}><span className="muted">{fmtTime(s.at).slice(5)}</span> {s.by}：{s.action === 'created' ? t('a_' + a.type) : s.action}</li>)}</ul>
       {a.outcome && <div className="success small">{t('outcome')}：{a.outcome}</div>}

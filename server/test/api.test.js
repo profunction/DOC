@@ -259,3 +259,20 @@ test('geocode: needs login, short query rejected, network failure returns empty 
   const r = await j('/geocode?q=Taman%20Pelangi%20Johor%20Bahru', {}, coord);
   assert.equal(r.status, 200); assert.equal(typeof r.data, 'object');
 });
+
+test('caregiver live location: shared only while on a task, visible to that family, with accuracy', async () => {
+  const cg = await login('0100000003');   // 阿强，只有林伯伯（客人 2）的任务
+  const fam2 = await login('0100000022'); const fam1 = await login('0100000012');
+  const r = (await j('/me/location', { body: { lat: 1.54, lng: 103.63, accuracy: 12 } }, cg)).data;
+  assert.equal(r.shared, true); assert.deepEqual(r.clients, [2]);
+  const loc = (await j('/clients/2/caregiver-location', {}, fam2)).data;
+  assert.equal(loc.lat, 1.54); assert.equal(loc.accuracy, 12); assert.match(loc.name, /阿强/);
+  assert.equal((await j('/clients/1/caregiver-location', {}, fam1)).data, null);
+  assert.equal((await j('/me/location', { body: { lat: 'x' } }, cg)).status, 400);
+  assert.equal((await j('/me/location', { body: { lat: 1, lng: 1 } }, fam1)).status, 403);
+  // 长者 SOS 带精度
+  const elder = await login('0100000011');
+  const a = (await j('/alerts', { body: { type: 'sos', lat: 1.4855, lng: 103.767, accuracy: 8 } }, elder)).data;
+  assert.equal(a.accuracy, 8);
+  assert.equal((await j('/public/info')).data.maps, 'osm');
+});

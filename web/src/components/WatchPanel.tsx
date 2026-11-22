@@ -13,6 +13,7 @@ export function WatchPanel({ clientId, canSimulate }: { clientId: number; canSim
   const { user } = useStore();
   const { data: w, reload } = useLoad<any>(`/clients/${clientId}/watch`, [], ['watch', 'alert']);
   const { data: trail } = useLoad<any[]>(`/clients/${clientId}/watch/trail?hours=24`, [], ['watch']);
+  const { data: cg } = useLoad<any>(`/clients/${clientId}/caregiver-location`, [], ['caregiver', 'task']);
   const [f, setF] = useState<any>(null);
   const [msg, setMsg] = useState('');
   const [picking, setPicking] = useState(false);
@@ -35,13 +36,15 @@ export function WatchPanel({ clientId, canSimulate }: { clientId: number; canSim
         <div className="watch-stats">
           <div><IonIcon icon={(w.watch_battery ?? 100) <= w.low_battery ? batteryDeadOutline : batteryHalfOutline} /><b>{w.watch_battery ?? '-'}%</b><span>{t('battery')}</span></div>
           <div><IonIcon icon={heartOutline} /><b>{last?.heart_rate || '-'}</b><span>bpm</span></div>
-          <div><IonIcon icon={locationOutline} /><b>{w.watch_last_seen ? niceTime(w.watch_last_seen) : '-'}</b><span>{t('lastSeen')}</span></div>
+          <div><IonIcon icon={locationOutline} /><b>{w.watch_last_seen ? niceTime(w.watch_last_seen) : '-'}</b><span>{t('lastSeen')}{last?.accuracy ? ` · ±${last.accuracy} m` : ''}</span></div>
         </div>
         {last?.lat && <div className="row" style={{ marginTop: '.6rem' }}>
           <Btn v="sm" href={mapsLink(null, last.lat, last.lng)} target="_blank" rel="noreferrer"><IonIcon slot="start" icon={mapOutline} />{t('openMap')}</Btn>
           {trail && trail.length > 1 && <span className="small muted">{t('trail24')}：{trail.length} 点</span>}
         </div>}
-        <MapView last={last?.lat ? { lat: last.lat, lng: last.lng, label: `${t('lastSeen')} ${niceTime(w.watch_last_seen)}` } : null}
+        {cg && <div className="success small">🚗 {cg.name} · {cg.task_title} · {niceTime(cg.at)}{cg.accuracy ? ` · ±${cg.accuracy} m` : ''}</div>}
+        <MapView last={last?.lat ? { lat: last.lat, lng: last.lng, accuracy: last.accuracy, label: `${t('lastSeen')} ${niceTime(w.watch_last_seen)}${last.accuracy ? ` ±${last.accuracy} m` : ''}` } : null}
+          caregiver={cg ? { lat: cg.lat, lng: cg.lng, accuracy: cg.accuracy, label: `${cg.name} ${niceTime(cg.at)}` } : null}
           home={home.lat != null ? { lat: home.lat, lng: home.lng! } : null} radius={w.safe_lat != null ? w.safe_radius : 0}
           trail={(trail || []).slice().reverse().map(p => ({ lat: p.lat, lng: p.lng }))} onPick={picking ? (p) => { setPicking(false); save({ safe_lat: p.lat, safe_lng: p.lng }); } : undefined} className={picking ? 'picking' : ''} />
         {picking && <p className="small" style={{ color: 'var(--brand)', marginTop: '.4rem' }}>{t('tapMapToSetHome')}</p>}

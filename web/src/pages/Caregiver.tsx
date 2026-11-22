@@ -1,5 +1,5 @@
 // 照顾人端：我的任务、开始 / 完成、填探访报告、客人资料。
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { listOutline, checkmarkDoneOutline, callOutline, navigateOutline, medkitOutline, chatbubblesOutline, playOutline, documentTextOutline, pinOutline } from 'ionicons/icons';
 import { IonIcon } from '@ionic/react';
 import { useT } from '../i18n';
@@ -7,6 +7,7 @@ import { useStore } from '../store';
 import { api, fmtTime, today, niceTime } from '../api';
 import { Shell, useLoad, Badge, Empty, telLink, waLink, mapsLink, useErr, Btn } from '../components/ui';
 import { ReportForm } from './Coordinator';
+import { startLiveLocation, stopLiveLocation } from '../liveLocation';
 import { Chat } from './Family';
 
 export default function Caregiver() {
@@ -32,6 +33,9 @@ function Tasks() {
   const { Err, show } = useErr();
   const open = (data || []).filter(x => ['assigned', 'in_progress'].includes(x.status)).sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
   const todays = open.filter(x => x.scheduled_at.slice(0, 10) <= today());
+  // 今天有任务就共享位置，让子女和协调员看到照顾人在路上
+  useEffect(() => { if (todays.length) startLiveLocation(); else stopLiveLocation(); return () => {}; }, [todays.length]);
+  useEffect(() => () => stopLiveLocation(), []);
   const later = open.filter(x => x.scheduled_at.slice(0, 10) > today());
   async function start(id: number) { try { await api(`/tasks/${id}`, { method: 'PATCH', body: { status: 'in_progress' } }); reload(); } catch (e) { show(e); } }
   async function showInfo(cid: number) { try { setInfo(await api(`/clients/${cid}`)); } catch (e) { show(e); } }
@@ -61,6 +65,7 @@ function Tasks() {
   return (
     <div>
       {Err}
+      {todays.length > 0 && <p className="small muted">📡 {t('sharingLocation')}</p>}
       <h3>{t('today')}</h3>{!todays.length && <Empty />}{todays.map(x => <Item key={x.id} x={x} />)}
       <h3 style={{ marginTop: '1rem' }}>{t('upcoming')}</h3>{!later.length && <Empty />}{later.map(x => <Item key={x.id} x={x} />)}
     </div>

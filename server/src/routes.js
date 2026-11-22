@@ -9,6 +9,7 @@ import { createInvite, findInvite, useInvite, unusablePasswordHash, maskPhone, r
 import { getSetting, setSetting, getHotline, SETTING_KEYS, backupNow, listBackups, BACKUP_DIR } from './settings.js';
 import { handlePosition, handleEvent, watchSummary, watchTrail, checkOffline } from './watch.js';
 import { saveToken, removeToken, fcmConfigured, pushFcmToClientAudience } from './fcm.js';
+import { updateCaregiverPosition, caregiverForClient } from './location.js';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
@@ -51,6 +52,8 @@ pub.get('/info', (req, res) => {
   res.json({
     hotline: HOTLINE,
     demo: process.env.SEED_DEMO !== '0',
+    maps: process.env.GOOGLE_MAPS_KEY ? 'google' : 'osm',
+    google_maps_key: process.env.GOOGLE_MAPS_KEY || '',
     whatsapp: `https://wa.me/${HOTLINE}`,
     plans: [
       { id: 'basic', fee: [150, 200] },
@@ -239,8 +242,8 @@ api.post('/alerts', (req, res) => {
   if (!clientId || !canSeeClient(req.user, clientId)) return res.status(403).json({ error: 'forbidden' });
   const type = b.type || 'sos';
   const source = b.source || (req.user.role === 'elder' ? 'app' : req.user.role === 'family' ? 'family' : 'hotline');
-  const r = db.prepare(`INSERT INTO alerts (client_id, source, type, lat, lng, description, steps) VALUES (?,?,?,?,?,?,?)`)
-    .run(clientId, source, type, b.lat ?? null, b.lng ?? null, b.description || null,
+  const r = db.prepare(`INSERT INTO alerts (client_id, source, type, lat, lng, accuracy, description, steps) VALUES (?,?,?,?,?,?,?,?)`)
+    .run(clientId, source, type, b.lat ?? null, b.lng ?? null, b.accuracy ?? null, b.description || null,
       JSON.stringify([{ at: nowIso(), by: req.user.name, action: 'created' }]));
   const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(r.lastInsertRowid);
   const client = db.prepare('SELECT name FROM clients WHERE id = ?').get(clientId);
@@ -522,9 +525,17 @@ api.get('/geocode', rateLimit('geocode', 60), async (req, res) => {
   if (q.length < 4) return res.status(400).json({ error: 'query_too_short' });
   if (geoCache.has(q)) return res.json(geoCache.get(q));
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=my&q=${encodeURIComponent(q)}`, { headers: { 'User-Agent': `AnXinCare/1.0 (+https://wa.me/${getHotline()})`, 'Accept-Language': 'zh,en,ms' }, signal: AbortSignal.timeout(8000) });
-    const j = await r.json();
-    const out = j?.[0] ? { lat: Number(j[0].lat), lng: Number(j[0].lon), name: j[0].display_name } : {};
+    let out = {};
+    if (process.env.GOOGLE_MAPS_KEY) {
+      const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?region=my&language=zh-CN&address=${encodeURIComponent(q)}&key=${process.env.GOOGLE_MAPS_KEY}`, { signal: AbortSignal.timeout(8000) });
+      const j = await r.json(); const g = j?.results?.[0];
+      if (g) out = { lat: g.geometry.location.lat, lng: g.geometry.location.lng, name: g.formatted_address, source: 'google', precise: g.geometry.location_type === 'ROOFTOP' };
+    }
+    if (!out.lat) {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=my&q=${encodeURIComponent(q)}`, { headers: { 'User-Agent': `AnXinCare/1.0 (+https://wa.me/${getHotline()})`, 'Accept-Language': 'zh,en,ms' }, signal: AbortSignal.timeout(8000) });
+      const j = await r.json();
+      if (j?.[0]) out = { lat: Number(j[0].lat), lng: Number(j[0].lon), name: j[0].display_name, source: 'osm' };
+    }
     geoCache.set(q, out); res.json(out);
   } catch { res.json({}); }
 });
@@ -558,6 +569,14 @@ api.get('/watch/overview', requireRole('coordinator'), (req, res) => {
   const rows = db.prepare(`SELECT id FROM clients WHERE active = 1 AND watch_id IS NOT NULL AND watch_id != ''`).all();
   res.json(rows.map(r => watchSummary(r.id)));
 });
+
+// ---------- 照顾人实时位置 ----------
+api.post('/me/location', requireRole('caregiver', 'coordinator'), (req, res) => {
+  const { lat, lng, accuracy } = req.body || {};
+  if (typeof lat !== 'number' || typeof lng !== 'number') return res.status(400).json({ error: 'bad_position' });
+  res.json(updateCaregiverPosition(req.user, lat, lng, typeof accuracy === 'number' ? Math.round(accuracy) : null));
+});
+api.get('/clients/:id/caregiver-location', (req, res) => { const id = guardClient(req, res); if (!id) return; res.json(caregiverForClient(id)); });
 
 // ---------- 推送 token ----------
 api.post('/push/token', (req, res) => { saveToken(req.user.id, String(req.body?.token || ''), req.body?.platform); res.json({ ok: true, fcm: fcmConfigured() }); });
