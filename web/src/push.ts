@@ -2,9 +2,11 @@
 import { PushNotifications } from '@capacitor/push-notifications';
 import { api, isNative } from './api';
 
+declare const __PUSH_ENABLED__: boolean;
 let started = false;
 export async function startPush(navigate: (path: string) => void) {
-  if (!isNative || started) return;
+  // 没有 google-services.json 时绝不调用插件：FirebaseMessaging 未初始化会让 App 直接闪退
+  if (!isNative || started || !__PUSH_ENABLED__) return;
   started = true;
   try {
     const perm = await PushNotifications.requestPermissions();
