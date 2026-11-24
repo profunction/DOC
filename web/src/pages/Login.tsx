@@ -9,7 +9,7 @@ import { bio } from '../native';
 
 const DEMO = [
   { role: 'roleElder', phone: '0100000011' }, { role: 'roleFamily', phone: '0100000012' },
-  { role: 'roleCoordinator', phone: '0100000001' }, { role: 'roleCaregiver', phone: '0100000002' },
+  { role: 'roleAdmin', phone: '0100000001' }, { role: 'roleCoordinator', phone: '0100000004' }, { role: 'roleCaregiver', phone: '0100000002' },
 ];
 
 export default function Login({ initialMode }: { initialMode?: 'login' | 'register' | 'activate' }) {

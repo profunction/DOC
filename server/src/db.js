@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS users (
   phone TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('elder','family','coordinator','caregiver')),
+  role TEXT NOT NULL,
   lang TEXT NOT NULL DEFAULT 'zh',
   client_id INTEGER,                      -- elder 账号对应的客人
   region TEXT,                            -- caregiver 负责地区
@@ -203,6 +203,18 @@ for (const sql of [
   `ALTER TABLE clients ADD COLUMN verified INTEGER NOT NULL DEFAULT 1`,   // 0 = 顾客自助注册、协调员尚未确认
   `ALTER TABLE clients ADD COLUMN source TEXT`,
 ]) { try { db.exec(sql); } catch { /* 已存在 */ } }
+
+// 旧版 users 表有 role 的 CHECK 约束（不含 admin），重建一次
+try {
+  const sql = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='users'`).get()?.sql || '';
+  if (/CHECK \(role IN/.test(sql)) {
+    db.exec(`PRAGMA foreign_keys = OFF; BEGIN;
+      CREATE TABLE users_new (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL,
+        lang TEXT NOT NULL DEFAULT 'zh', client_id INTEGER, region TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+      INSERT INTO users_new SELECT id, phone, password_hash, name, role, lang, client_id, region, active, created_at FROM users;
+      DROP TABLE users; ALTER TABLE users_new RENAME TO users; COMMIT; PRAGMA foreign_keys = ON;`);
+  }
+} catch (e) { console.error('users 表迁移失败', e.message); }
 
 export function audit(userId, action, target) {
   db.prepare('INSERT INTO audit_log (user_id, action, target) VALUES (?,?,?)').run(userId ?? null, action, target ?? null);

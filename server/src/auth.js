@@ -23,16 +23,20 @@ export function requireAuth(req, res, next) {
   next();
 }
 
+/** admin 拥有 coordinator 的全部权限；requireRole('admin') 则只有 admin */
 export function requireRole(...roles) {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) return res.status(403).json({ error: 'forbidden' });
+    const r = req.user.role;
+    const ok = roles.includes(r) || (r === 'admin' && roles.includes('coordinator'));
+    if (!ok) return res.status(403).json({ error: 'forbidden' });
     next();
   };
 }
+export const isStaff = (u) => u.role === 'coordinator' || u.role === 'admin';
 
 /** 该用户可以看到哪些客人 */
 export function clientIdsFor(user) {
-  if (user.role === 'coordinator') return db.prepare('SELECT id FROM clients WHERE active = 1').all().map(r => r.id);
+  if (user.role === 'coordinator' || user.role === 'admin') return db.prepare('SELECT id FROM clients WHERE active = 1').all().map(r => r.id);
   if (user.role === 'elder') return user.client_id ? [user.client_id] : [];
   if (user.role === 'family') return db.prepare('SELECT client_id FROM family_links WHERE user_id = ?').all(user.id).map(r => r.client_id);
   if (user.role === 'caregiver') {

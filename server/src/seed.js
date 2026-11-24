@@ -3,7 +3,8 @@ import bcrypt from 'bcryptjs';
 import { db, encrypt } from './db.js';
 
 export const DEMO_ACCOUNTS = [
-  { phone: '0100000001', password: '123456', role: 'coordinator', name: '总协调员 阿明' },
+  { phone: '0100000001', password: '123456', role: 'admin', name: '管理员 阿明' },
+  { phone: '0100000004', password: '123456', role: 'coordinator', name: '值班协调员 小丽' },
   { phone: '0100000002', password: '123456', role: 'caregiver', name: '照顾人 小芳', region: '新山市区' },
   { phone: '0100000003', password: '123456', role: 'caregiver', name: '照顾人 阿强', region: '士古来' },
   { phone: '0100000011', password: '123456', role: 'elder', name: '陈阿婆', client: 1 },
@@ -22,11 +23,12 @@ export function ensureAdmin() {
   const existing = db.prepare('SELECT id, password_hash, role FROM users WHERE phone = ?').get(phone);
   if (existing) {
     // 在 Render 改了 ADMIN_PASSWORD → 重启后同步到账号（忘记密码时的恢复方法）
-    if (!bcrypt.compareSync(pw, existing.password_hash)) { db.prepare('UPDATE users SET password_hash = ?, active = 1 WHERE id = ?').run(bcrypt.hashSync(pw, 10), existing.id); console.log(`已更新协调员 ${phone} 的密码`); }
+    if (!bcrypt.compareSync(pw, existing.password_hash)) { db.prepare('UPDATE users SET password_hash = ?, active = 1 WHERE id = ?').run(bcrypt.hashSync(pw, 10), existing.id); console.log(`已更新管理员 ${phone} 的密码`); }
+    if (existing.role !== 'admin') db.prepare(`UPDATE users SET role = 'admin' WHERE id = ?`).run(existing.id);
     return;
   }
-  db.prepare('INSERT INTO users (phone, password_hash, name, role, lang) VALUES (?,?,?,?,?)').run(phone, bcrypt.hashSync(pw, 10), process.env.ADMIN_NAME || '总协调员', 'coordinator', 'zh');
-  console.log(`已建立协调员账号 ${phone}`);
+  db.prepare('INSERT INTO users (phone, password_hash, name, role, lang) VALUES (?,?,?,?,?)').run(phone, bcrypt.hashSync(pw, 10), process.env.ADMIN_NAME || '管理员', 'admin', 'zh');
+  console.log(`已建立管理员账号 ${phone}`);
 }
 
 export function seedIfEmpty() {

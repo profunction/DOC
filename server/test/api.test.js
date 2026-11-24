@@ -287,3 +287,22 @@ test('clear demo data keeps only the coordinator; demo flag turns off; restore r
   assert.equal((await j('/public/info')).data.demo, false);
   assert.ok((await j('/dashboard', {}, coord)).status === 200);
 });
+
+test('roles: admin has everything, coordinator cannot touch settings, data, accounts of staff', async () => {
+  const admin = await login('0100000001');
+  assert.equal((await j('/me', {}, admin)).data.user.role, 'admin');
+  // 上一个测试清空了演示数据，这里由管理员重新开一个值班协调员
+  assert.ok((await j('/users', { body: { phone: '0100000004', name: '值班协调员', role: 'coordinator', password: '123456' } }, admin)).data.id);
+  const co = await login('0100000004');
+  assert.equal((await j('/dashboard', {}, co)).status, 200);                       // 协调员能看总览
+  assert.equal((await j('/alerts?status=open', {}, co)).status, 200);
+  assert.equal((await j('/settings', {}, co)).status, 200);                         // 能看设置
+  assert.equal((await j('/settings', { method: 'PUT', body: { hotline: '1' } }, co)).status, 403);   // 不能改
+  assert.equal((await j('/settings/clear-data', { body: { confirm: 'DELETE' } }, co)).status, 403);
+  assert.equal((await j('/backups', { method: 'POST', body: {} }, co)).status, 403);
+  assert.equal((await j('/users', { body: { phone: '0199990077', name: 'x', role: 'coordinator' } }, co)).status, 403);
+  assert.equal((await j('/users', { body: { phone: '0199990078', name: 'y', role: 'caregiver' } }, co)).status, 200);   // 可开照顾人
+  const cu = (await j('/users', { body: { phone: '0199990079', name: 'z', role: 'coordinator' } }, admin)).data; assert.ok(cu.id);
+  assert.equal((await j(`/users/${cu.id}`, { method: 'PATCH', body: { active: 0 } }, co)).status, 403);
+  assert.equal((await j(`/users/${cu.id}`, { method: 'PATCH', body: { active: 0 } }, admin)).status, 200);
+});

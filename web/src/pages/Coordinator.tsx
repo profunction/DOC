@@ -15,13 +15,15 @@ import { AlertCard, ReportCard, Chat, Team } from './Family';
 export default function Coordinator() {
   const { t } = useT();
   const [tab, setTab] = useState('dashboard');
+  const { user } = useStore();
+  const isAdmin = user?.role === 'admin';
   const tabs = [
     { id: 'dashboard', label: t('dashboard'), icon: statsChartOutline }, { id: 'alerts', label: t('alerts'), icon: alertCircleOutline }, { id: 'dispatch', label: t('dispatch'), icon: gitBranchOutline },
     { id: 'clients', label: t('clients'), icon: peopleCircleOutline }, { id: 'reports', label: t('reports'), icon: documentTextOutline }, { id: 'partners', label: t('partners'), icon: peopleOutline },
-    { id: 'money', label: t('payments'), icon: cardOutline }, { id: 'aid', label: t('aid'), icon: businessOutline }, { id: 'users', label: t('users'), icon: personAddOutline }, { id: 'enquiries', label: t('enquiries'), icon: mailOpenOutline }, { id: 'watch', label: t('watchTab'), icon: watchOutline }, { id: 'settings', label: t('settings'), icon: settingsOutline },
+    { id: 'money', label: t('payments'), icon: cardOutline }, { id: 'aid', label: t('aid'), icon: businessOutline }, { id: 'users', label: t('users'), icon: personAddOutline }, { id: 'enquiries', label: t('enquiries'), icon: mailOpenOutline }, { id: 'watch', label: t('watchTab'), icon: watchOutline }, ...(isAdmin ? [{ id: 'settings', label: t('settings'), icon: settingsOutline }] : []),
   ];
   return (
-    <Shell title={`${t('appName')} · ${t('roleCoordinator')}`} tabs={tabs} tab={tab} onTab={setTab}>
+    <Shell title={`${t('appName')} · ${isAdmin ? t('roleAdmin') : t('roleCoordinator')}`} tabs={tabs} tab={tab} onTab={setTab}>
       {tab === 'dashboard' && <Dashboard go={setTab} />}
       {tab === 'alerts' && <Alerts />}
       {tab === 'dispatch' && <Dispatch />}
@@ -566,7 +568,7 @@ function Users() {
         <tbody>{data?.map(u => <tr key={u.id} style={u.active ? undefined : { opacity: .5 }}>
           <td><Badge>{t('role' + u.role[0].toUpperCase() + u.role.slice(1))}</Badge></td><td>{u.name}</td><td>{u.phone}</td><td>{u.region || (u.client_id ? clients?.find(c => c.id === u.client_id)?.name || `#${u.client_id}` : '')}</td>
           <td><div className="row">{u.active ? <Btn v="ghost sm" onClick={() => resend(u)}><IonIcon slot="start" icon={refreshOutline} />{t('resendInvite')}</Btn> : null}
-            {u.id !== me?.id && <Btn v="ghost sm" onClick={() => toggle(u)}>{u.active ? t('disableUser') : t('enableUser')}</Btn>}</div></td>
+            {u.id !== me?.id && me?.role === 'admin' && <Btn v="ghost sm" onClick={() => toggle(u)}>{u.active ? t('disableUser') : t('enableUser')}</Btn>}</div></td>
         </tr>)}</tbody></table></div>
     </div>
   );

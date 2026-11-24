@@ -4,7 +4,7 @@ import { api, setToken, getToken, subscribeEvents, type Handler } from './api';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { isNative } from './api';
 
-export type Role = 'elder' | 'family' | 'coordinator' | 'caregiver';
+export type Role = 'elder' | 'family' | 'coordinator' | 'caregiver' | 'admin';
 export interface User { id: number; phone: string; name: string; role: Role; lang: string; client_id: number | null; region: string | null; }
 
 interface Store {
@@ -49,7 +49,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setEventSeq(seq => ({ ...seq, [event]: (seq[event] || 0) + 1 }));
       handlers.current.forEach(h => h(event, data));
       if (event === 'linked') { loadMe(); notify('✅ 已开通 / Account linked', '现在可以查看父母的资料了'); }
-      if (event === 'alert' && data.status === 'new' && (user.role === 'coordinator' || user.role === 'family')) {
+      if (event === 'alert' && data.status === 'new' && (user.role === 'coordinator' || user.role === 'admin' || user.role === 'family')) {
         notify(`🚨 ${data.client_name || ''} 紧急求助`, '协调中心请马上处理 / Emergency alert');
       } else if (event === 'report' && user.role === 'family') {
         notify('📝 新探访报告 / New visit report', '点开查看详情');

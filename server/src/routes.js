@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { db, encrypt, decrypt, audit, nowIso } from './db.js';
-import { sign, requireAuth, requireRole, clientIdsFor, canSeeClient } from './auth.js';
+import { sign, requireAuth, requireRole, clientIdsFor, canSeeClient, isStaff } from './auth.js';
 import { subscribe, broadcastClient, broadcastUser } from './events.js';
 import { pushNtfy, integrationStatus } from './integrations.js';
 import { uploads } from './uploads.js';
@@ -305,17 +305,17 @@ api.post('/tasks', requireRole('family', 'coordinator', 'elder'), (req, res) => 
   const clientId = Number(b.client_id || req.user.client_id);
   if (!clientId || !canSeeClient(req.user, clientId)) return res.status(403).json({ error: 'forbidden' });
   if (!b.type || !b.scheduled_at) return res.status(400).json({ error: 'type_time_required' });
-  const status = req.user.role === 'coordinator' && b.assignee_user_id ? 'assigned' : 'requested';
+  const status = isStaff(req.user) && b.assignee_user_id ? 'assigned' : 'requested';
   const r = db.prepare(`INSERT INTO tasks (client_id, type, title, scheduled_at, status, assignee_user_id, partner_id, notes, fee, created_by)
       VALUES (?,?,?,?,?,?,?,?,?,?)`).run(clientId, b.type, b.title || b.type, b.scheduled_at, status,
     b.assignee_user_id || null, b.partner_id || null, b.notes || null, b.fee || 0, req.user.id);
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(r.lastInsertRowid);
   broadcastClient(clientId, 'task', task);
   systemMessage(clientId, `📅 ${req.user.name} 预约了「${task.title}」，时间 ${task.scheduled_at}。`);
-  if (req.user.role !== 'coordinator') {
+  if (!isStaff(req.user)) {
     const client = db.prepare('SELECT name FROM clients WHERE id = ?').get(clientId);
     pushNtfy({ title: `📅 新预约：${client?.name} · ${task.title}`, message: `${task.scheduled_at}\n${req.user.name} 预约${b.notes ? '：' + b.notes : ''}\n请在「派单」安排人手`, priority: 'default', tags: ['calendar'] });
-    const coords = db.prepare(`SELECT id FROM users WHERE role = 'coordinator' AND active = 1`).all().map(u => u.id);
+    const coords = db.prepare(`SELECT id FROM users WHERE role IN ('coordinator','admin') AND active = 1`).all().map(u => u.id);
     pushFcmToUsers(coords, { title: `📅 新预约：${client?.name}`, body: `${task.title} · ${task.scheduled_at}`, data: { type: 'task', client_id: String(clientId) } });
   }
   res.json(task);
@@ -389,8 +389,8 @@ api.post('/messages', (req, res) => {
 
 // ---------- 合作伙伴 ----------
 api.get('/partners', (req, res) => {
-  const rows = db.prepare(`SELECT * FROM partners ${req.user.role === 'coordinator' ? '' : "WHERE status = 'active'"} ORDER BY type, name`).all();
-  if (req.user.role === 'coordinator') return res.json(rows);
+  const rows = db.prepare(`SELECT * FROM partners ${isStaff(req.user) ? '' : "WHERE status = 'active'"} ORDER BY type, name`).all();
+  if (isStaff(req.user)) return res.json(rows);
   res.json(rows.map(({ notes, price_note, ...r }) => r));  // 家属看不到内部价钱与备注
 });
 api.post('/partners', requireRole('coordinator'), (req, res) => {
@@ -458,7 +458,8 @@ api.get('/users', requireRole('coordinator'), (req, res) => {
 api.post('/users', requireRole('coordinator'), (req, res) => {
   const b = req.body || {};
   if (!b.phone || !b.name || !b.role) return res.status(400).json({ error: 'missing' });
-  if (!['elder', 'family', 'coordinator', 'caregiver'].includes(b.role)) return res.status(400).json({ error: 'bad_role' });
+  if (!['elder', 'family', 'coordinator', 'caregiver', 'admin'].includes(b.role)) return res.status(400).json({ error: 'bad_role' });
+  if (['coordinator', 'admin'].includes(b.role) && req.user.role !== 'admin') return res.status(403).json({ error: 'admin_only' });
   try {
     const hash = b.password ? bcrypt.hashSync(String(b.password), 10) : unusablePasswordHash();
     const r = db.prepare('INSERT INTO users (phone, password_hash, name, role, lang, client_id, region) VALUES (?,?,?,?,?,?,?)')
@@ -492,7 +493,7 @@ api.post('/users/:id/invite', requireRole('coordinator'), (req, res) => {
   if (!u) return res.status(404).json({ error: 'not_found' });
   res.json({ invite: createInvite(u.id, req.user.id), name: u.name, phone: u.phone });
 });
-api.patch('/users/:id', requireRole('coordinator'), (req, res) => {
+api.patch('/users/:id', requireRole('admin'), (req, res) => {
   const id = Number(req.params.id);
   if (id === req.user.id && req.body?.active === 0) return res.status(400).json({ error: 'cannot_disable_self' });
   if (req.body?.active !== undefined) db.prepare('UPDATE users SET active = ? WHERE id = ?').run(req.body.active ? 1 : 0, id);
@@ -522,7 +523,7 @@ api.post('/clients/:id/family', requireRole('coordinator'), (req, res) => {
 });
 api.get('/enquiries', requireRole('coordinator'), (req, res) => res.json(db.prepare(`SELECT e.*, (SELECT c.id FROM family_links f JOIN clients c ON c.id = f.client_id WHERE f.user_id = e.user_id ORDER BY c.id LIMIT 1) AS client_id,
   (SELECT c.name FROM family_links f JOIN clients c ON c.id = f.client_id WHERE f.user_id = e.user_id ORDER BY c.id LIMIT 1) AS client_name FROM enquiries e ORDER BY e.id DESC LIMIT 200`).all()));
-api.get('/audit', requireRole('coordinator'), (req, res) => res.json(db.prepare(`SELECT a.*, u.name AS user_name FROM audit_log a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.id DESC LIMIT 200`).all()));
+api.get('/audit', requireRole('admin'), (req, res) => res.json(db.prepare(`SELECT a.*, u.name AS user_name FROM audit_log a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.id DESC LIMIT 200`).all()));
 
 // ---------- 地址定位（OpenStreetMap Nominatim，免费；服务器代转以带上 User-Agent） ----------
 const geoCache = new Map();
@@ -552,7 +553,7 @@ api.get('/clients/:id/watch/trail', (req, res) => { const id = guardClient(req, 
 api.patch('/clients/:id/watch', requireRole('coordinator', 'family'), (req, res) => {
   const id = guardClient(req, res); if (!id) return;
   const b = req.body || {};
-  if (req.user.role === 'coordinator' && b.watch_id !== undefined) db.prepare('UPDATE clients SET watch_id = ? WHERE id = ?').run(String(b.watch_id).trim() || null, id);
+  if (isStaff(req.user) && b.watch_id !== undefined) db.prepare('UPDATE clients SET watch_id = ? WHERE id = ?').run(String(b.watch_id).trim() || null, id);
   if (b.safe_lat !== undefined && b.safe_lng !== undefined) db.prepare('UPDATE clients SET safe_lat = ?, safe_lng = ?, watch_status = NULL WHERE id = ?').run(b.safe_lat === null ? null : Number(b.safe_lat), b.safe_lng === null ? null : Number(b.safe_lng), id);
   if (b.safe_radius !== undefined) db.prepare('UPDATE clients SET safe_radius = ? WHERE id = ?').run(Math.max(0, Math.min(5000, Number(b.safe_radius) || 0)), id);
   if (b.hr_min !== undefined) db.prepare('UPDATE clients SET hr_min = ? WHERE id = ?').run(Number(b.hr_min) || 45, id);
@@ -594,7 +595,7 @@ api.get('/settings', requireRole('coordinator'), (req, res) => {
   out.ntfy_token = out.ntfy_token ? '••••••' : '';
   res.json({ ...out, backups: listBackups() });
 });
-api.put('/settings', requireRole('coordinator'), (req, res) => {
+api.put('/settings', requireRole('admin'), (req, res) => {
   const b = req.body || {};
   for (const k of SETTING_KEYS) if (b[k] !== undefined && !(k === 'ntfy_token' && b[k] === '••••••')) setSetting(k, String(b[k]).trim());
   audit(req.user.id, 'update_settings');
@@ -604,22 +605,22 @@ api.post('/settings/test-push', requireRole('coordinator'), async (req, res) => 
   const ok = await pushNtfy({ title: '✅ 安心照顾测试推送', message: `${req.user.name} 发送的测试。收到这条就表示紧急警报会推到这台手机。`, priority: 'default', tags: ['white_check_mark'] });
   res.json({ ok });
 });
-api.post('/backups', requireRole('coordinator'), async (req, res) => {
+api.post('/backups', requireRole('admin'), async (req, res) => {
   const f = await backupNow(); audit(req.user.id, 'backup');
   res.json({ file: path.basename(f) });
 });
-api.post('/settings/clear-data', requireRole('coordinator'), (req, res) => {
+api.post('/settings/clear-data', requireRole('admin'), (req, res) => {
   if (req.body?.confirm !== 'DELETE') return res.status(400).json({ error: 'confirm_required' });
   clearAllData(req.user.id); audit(req.user.id, 'clear_all_data');
   res.json({ ok: true });
 });
-api.post('/backups/restore', requireRole('coordinator'), async (req, res) => {
+api.post('/backups/restore', requireRole('admin'), async (req, res) => {
   const m = /^data:[^;]+;base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body?.data || ''));
   if (!m) return res.status(400).json({ error: 'bad_backup' });
   try { await restoreBackup(Buffer.from(m[1], 'base64')); res.json({ ok: true, restarting: true }); }
   catch (e) { res.status(400).json({ error: e.message === 'bad_backup' ? 'bad_backup' : 'restore_failed' }); }
 });
-api.get('/backups/:file', requireRole('coordinator'), (req, res) => {
+api.get('/backups/:file', requireRole('admin'), (req, res) => {
   const f = path.basename(req.params.file);
   if (!/^anxin-[0-9-]+\.db$/.test(f)) return res.status(400).json({ error: 'bad_file' });
   audit(req.user.id, 'download_backup', f);

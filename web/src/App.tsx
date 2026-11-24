@@ -17,7 +17,7 @@ import Coordinator from './pages/Coordinator';
 import Caregiver from './pages/Caregiver';
 import Legal from './pages/Legal';
 
-const ROLE_HOME = { elder: '/app/elder', family: '/app/family', coordinator: '/app/coord', caregiver: '/app/caregiver' } as const;
+const ROLE_HOME = { elder: '/app/elder', family: '/app/family', coordinator: '/app/coord', admin: '/app/coord', caregiver: '/app/caregiver' } as const;
 
 function AppHome() {
   const { user, ready } = useStore();
@@ -30,7 +30,7 @@ function Guard({ role, children }: { role: string; children: JSX.Element }) {
   const { user, ready } = useStore();
   if (!ready) return <p style={{ padding: '2rem', textAlign: 'center' }}>…</p>;
   if (!user) return <Navigate to="/app/login" replace />;
-  if (user.role !== role) return <Navigate to="/app" replace />;
+  if (user.role !== role && !(role === 'coordinator' && user.role === 'admin')) return <Navigate to="/app" replace />;
   return children;
 }
 
