@@ -19,7 +19,12 @@ export const DEMO_ACCOUNTS = [
 export function ensureAdmin() {
   const phone = String(process.env.ADMIN_PHONE || '').trim(); const pw = String(process.env.ADMIN_PASSWORD || '');
   if (!phone || !pw) return;
-  if (db.prepare('SELECT id FROM users WHERE phone = ?').get(phone)) return;
+  const existing = db.prepare('SELECT id, password_hash, role FROM users WHERE phone = ?').get(phone);
+  if (existing) {
+    // 在 Render 改了 ADMIN_PASSWORD → 重启后同步到账号（忘记密码时的恢复方法）
+    if (!bcrypt.compareSync(pw, existing.password_hash)) { db.prepare('UPDATE users SET password_hash = ?, active = 1 WHERE id = ?').run(bcrypt.hashSync(pw, 10), existing.id); console.log(`已更新协调员 ${phone} 的密码`); }
+    return;
+  }
   db.prepare('INSERT INTO users (phone, password_hash, name, role, lang) VALUES (?,?,?,?,?)').run(phone, bcrypt.hashSync(pw, 10), process.env.ADMIN_NAME || '总协调员', 'coordinator', 'zh');
   console.log(`已建立协调员账号 ${phone}`);
 }
