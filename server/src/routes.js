@@ -8,7 +8,7 @@ import { uploads } from './uploads.js';
 import { createInvite, findInvite, useInvite, unusablePasswordHash, maskPhone, rateLimit, failures } from './accounts.js';
 import { getSetting, setSetting, getHotline, SETTING_KEYS, backupNow, listBackups, BACKUP_DIR, clearAllData, demoCleared, restoreBackup } from './settings.js';
 import { handlePosition, handleEvent, watchSummary, watchTrail, checkOffline } from './watch.js';
-import { saveToken, removeToken, fcmConfigured, pushFcmToClientAudience } from './fcm.js';
+import { saveToken, removeToken, fcmConfigured, pushFcmToClientAudience, pushFcmToUsers } from './fcm.js';
 import { updateCaregiverPosition, caregiverForClient } from './location.js';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -312,6 +312,12 @@ api.post('/tasks', requireRole('family', 'coordinator', 'elder'), (req, res) => 
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(r.lastInsertRowid);
   broadcastClient(clientId, 'task', task);
   systemMessage(clientId, `📅 ${req.user.name} 预约了「${task.title}」，时间 ${task.scheduled_at}。`);
+  if (req.user.role !== 'coordinator') {
+    const client = db.prepare('SELECT name FROM clients WHERE id = ?').get(clientId);
+    pushNtfy({ title: `📅 新预约：${client?.name} · ${task.title}`, message: `${task.scheduled_at}\n${req.user.name} 预约${b.notes ? '：' + b.notes : ''}\n请在「派单」安排人手`, priority: 'default', tags: ['calendar'] });
+    const coords = db.prepare(`SELECT id FROM users WHERE role = 'coordinator' AND active = 1`).all().map(u => u.id);
+    pushFcmToUsers(coords, { title: `📅 新预约：${client?.name}`, body: `${task.title} · ${task.scheduled_at}`, data: { type: 'task', client_id: String(clientId) } });
+  }
   res.json(task);
 });
 api.patch('/tasks/:id', requireRole('coordinator', 'caregiver', 'family'), (req, res) => {
