@@ -21,7 +21,7 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);   // Render / Caddy 在前面，用 X-Forwarded-For 取真实 IP
 app.use(cors());
-app.use(express.json({ limit: '6mb' }));
+app.use(express.json({ limit: '40mb' }));   // 报告照片、备份恢复
 app.use('/api', api);
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: 'server_error' }); });
 

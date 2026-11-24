@@ -6,7 +6,7 @@ import { subscribe, broadcastClient, broadcastUser } from './events.js';
 import { pushNtfy, integrationStatus } from './integrations.js';
 import { uploads } from './uploads.js';
 import { createInvite, findInvite, useInvite, unusablePasswordHash, maskPhone, rateLimit, failures } from './accounts.js';
-import { getSetting, setSetting, getHotline, SETTING_KEYS, backupNow, listBackups, BACKUP_DIR } from './settings.js';
+import { getSetting, setSetting, getHotline, SETTING_KEYS, backupNow, listBackups, BACKUP_DIR, clearAllData, demoCleared, restoreBackup } from './settings.js';
 import { handlePosition, handleEvent, watchSummary, watchTrail, checkOffline } from './watch.js';
 import { saveToken, removeToken, fcmConfigured, pushFcmToClientAudience } from './fcm.js';
 import { updateCaregiverPosition, caregiverForClient } from './location.js';
@@ -51,7 +51,7 @@ pub.get('/info', (req, res) => {
   const HOTLINE = getHotline();
   res.json({
     hotline: HOTLINE,
-    demo: process.env.SEED_DEMO !== '0',
+    demo: process.env.SEED_DEMO !== '0' && !demoCleared() && Boolean(db.prepare(`SELECT id FROM users WHERE phone = '0100000001' AND active = 1`).get()),
     maps: process.env.GOOGLE_MAPS_KEY ? 'google' : 'osm',
     google_maps_key: process.env.GOOGLE_MAPS_KEY || '',
     whatsapp: `https://wa.me/${HOTLINE}`,
@@ -601,6 +601,17 @@ api.post('/settings/test-push', requireRole('coordinator'), async (req, res) => 
 api.post('/backups', requireRole('coordinator'), async (req, res) => {
   const f = await backupNow(); audit(req.user.id, 'backup');
   res.json({ file: path.basename(f) });
+});
+api.post('/settings/clear-data', requireRole('coordinator'), (req, res) => {
+  if (req.body?.confirm !== 'DELETE') return res.status(400).json({ error: 'confirm_required' });
+  clearAllData(req.user.id); audit(req.user.id, 'clear_all_data');
+  res.json({ ok: true });
+});
+api.post('/backups/restore', requireRole('coordinator'), async (req, res) => {
+  const m = /^data:[^;]+;base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body?.data || ''));
+  if (!m) return res.status(400).json({ error: 'bad_backup' });
+  try { await restoreBackup(Buffer.from(m[1], 'base64')); res.json({ ok: true, restarting: true }); }
+  catch (e) { res.status(400).json({ error: e.message === 'bad_backup' ? 'bad_backup' : 'restore_failed' }); }
 });
 api.get('/backups/:file', requireRole('coordinator'), (req, res) => {
   const f = path.basename(req.params.file);

@@ -47,3 +47,38 @@ export function scheduleBackups() {
   setTimeout(run, 60 * 1000).unref();
   setInterval(run, 24 * 60 * 60 * 1000).unref();
 }
+
+/** 清空演示数据：删掉所有客人、账号与记录，只保留调用者（协调员）与系统设置。 */
+export function clearAllData(keepUserId) {
+  const tx = db.transaction(() => {
+    for (const t of ['report_photos', 'reports', 'watch_positions', 'caregiver_positions', 'alerts', 'messages', 'payments', 'aid_applications', 'tasks', 'invites', 'push_tokens', 'family_links', 'enquiries', 'audit_log']) {
+      try { db.prepare(`DELETE FROM ${t}`).run(); } catch { /* 表可能不存在 */ }
+    }
+    db.prepare('DELETE FROM partners').run();
+    db.prepare('DELETE FROM clients').run();
+    db.prepare('DELETE FROM users WHERE id != ?').run(keepUserId);
+  });
+  tx();
+  try { fs.rmSync(path.join(DATA_DIR, 'uploads'), { recursive: true, force: true }); } catch { /* ignore */ }
+  db.prepare(`INSERT INTO settings (key, value) VALUES ('demo_cleared', '1') ON CONFLICT(key) DO UPDATE SET value = '1'`).run();
+}
+export const demoCleared = () => Boolean(db.prepare(`SELECT value FROM settings WHERE key = 'demo_cleared'`).get()?.value === '1');
+
+/** 恢复备份：先验证文件是合法的 SQLite 且有 users 表，再覆盖数据库并退出进程让服务重启 */
+export async function restoreBackup(buf) {
+  const Database = (await import('better-sqlite3')).default;
+  const tmp = path.join(DATA_DIR, `restore-${Date.now()}.db`);
+  fs.writeFileSync(tmp, buf);
+  try {
+    const t = new Database(tmp, { readonly: true });
+    const n = t.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+    t.close();
+    if (n < 1) throw new Error('empty');
+  } catch (e) { fs.rmSync(tmp, { force: true }); throw new Error('bad_backup'); }
+  const target = process.env.DB_PATH || path.join(DATA_DIR, 'anxin.db');
+  await backupNow();                                   // 恢复前先把现在的存一份
+  for (const suf of ['', '-wal', '-shm']) { try { fs.rmSync(target + suf, { force: true }); } catch { /* ignore */ } }
+  fs.renameSync(tmp, target);
+  setTimeout(() => process.exit(0), 300);              // Render / docker 会自动重启，用新数据库
+  return true;
+}

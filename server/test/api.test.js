@@ -276,3 +276,14 @@ test('caregiver live location: shared only while on a task, visible to that fami
   assert.equal(a.accuracy, 8);
   assert.equal((await j('/public/info')).data.maps, 'osm');
 });
+
+test('clear demo data keeps only the coordinator; demo flag turns off; restore rejects bad file', async () => {
+  const coord = await login('0100000001');
+  assert.equal((await j('/settings/clear-data', { body: { confirm: 'no' } }, coord)).status, 400);
+  assert.equal((await j('/backups/restore', { body: { data: 'data:application/octet-stream;base64,aGVsbG8=' } }, coord)).status, 400);
+  assert.equal((await j('/settings/clear-data', { body: { confirm: 'DELETE' } }, coord)).status, 200);
+  assert.deepEqual((await j('/clients', {}, coord)).data, []);
+  assert.equal((await j('/users', {}, coord)).data.length, 1);
+  assert.equal((await j('/public/info')).data.demo, false);
+  assert.ok((await j('/dashboard', {}, coord)).status === 200);
+});

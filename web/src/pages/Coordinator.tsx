@@ -1,5 +1,5 @@
 // 协调员端：实时警报、客人、派单、报告、伙伴、付费与援助、账号。
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { statsChartOutline, alertCircleOutline, gitBranchOutline, peopleCircleOutline, documentTextOutline, peopleOutline, cardOutline, businessOutline, personAddOutline, mailOpenOutline } from 'ionicons/icons';
 import { useT } from '../i18n';
 import { useStore } from '../store';
@@ -98,8 +98,11 @@ function SettingsPage() {
   const { t } = useT();
   const { data, reload } = useLoad<any>('/settings');
   const { data: dash } = useLoad<any>('/dashboard');
+  const { data: info, reload: reloadInfo } = useLoad<any>('/public/info');
   const [f, setF] = useState<any>(null);
   const [msg, setMsg] = useState('');
+  const [del, setDel] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
   const { Err, show } = useErr();
   useEffect(() => { if (data) setF({ hotline: data.hotline, ntfy_url: data.ntfy_url, ntfy_topic: data.ntfy_topic }); }, [data]);
   if (!data || !f) return <p className="muted">{t('loading')}</p>;
@@ -121,6 +124,18 @@ function SettingsPage() {
         </div>
         <div className="row"><Btn v="" onClick={save}>{t('save')}</Btn><Btn v="ghost" onClick={test} disabled={!f.ntfy_topic}>{t('testPush')}</Btn>
           {f.ntfy_topic && <a className="small" href={`${f.ntfy_url.replace(/\/$/, '')}/${f.ntfy_topic}`} target="_blank" rel="noreferrer">{f.ntfy_url.replace(/^https?:\/\//, '')}/{f.ntfy_topic}</a>}</div>
+      </div>
+      <div className="card"><h3>🗂 {t('dataOwner')}</h3>
+        <p className="small muted">{info?.demo ? t('dataOwnerDemo') : t('dataOwnerReal')}</p>
+        {info?.demo && <><p className="small muted">{t('clearDemoHelp')}</p>
+          <div className="row"><input placeholder={t('typeDelete')} value={del} onChange={e => setDel(e.target.value)} style={{ padding: '.5rem', border: '1px solid var(--line)', borderRadius: 8 }} />
+            <Btn v="danger sm" disabled={del !== 'DELETE'} onClick={async () => { try { await api('/settings/clear-data', { body: { confirm: 'DELETE' } }); setMsg(t('cleared')); setDel(''); reloadInfo(); reload(); } catch (e) { show(e); } }}>{t('clearDemo')}</Btn></div></>}
+        <p className="small muted" style={{ marginTop: '.8rem' }}>{t('restoreHelp')}</p>
+        <label className="row"><Btn v="ghost sm" onClick={() => fileRef.current?.click()}>{t('restoreBackup')}</Btn><input ref={fileRef} type="file" accept=".db" hidden onChange={async e => {
+          const f = e.target.files?.[0]; if (!f) return;
+          const data = await new Promise<string>((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = no; r.readAsDataURL(f); });
+          try { await api('/backups/restore', { body: { data } }); setMsg(t('restoring')); } catch (err) { show(err); } e.target.value = '';
+        }} /></label>
       </div>
       <div className="card"><h3>📱 Firebase</h3><p className="small muted">{dash?.integrations?.fcm ? '✅ ' + t('pushReady') : '⚠️ ' + t('pushNotConfigured')}</p></div>
       <div className="card"><h3><IonIcon icon={cloudDownloadOutline} /> {t('backupTitle')}</h3>
